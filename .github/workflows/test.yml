@@ -1,0 +1,53 @@
+name: Test SonarScanner CLI Action
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-cross-platform:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java (ensure Java is available)
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Test SonarScanner CLI Action
+      id: setup
+      uses: ./
+      with:
+        sonar-scanner-version: '7.2.0.5079'
+        cache: 'true'
+
+    - name: Verify installation
+      shell: bash
+      run: |
+        echo "Testing sonar-scanner command..."
+        sonar-scanner --version
+        echo "SonarScanner CLI installed at: ${{ steps.setup.outputs.sonar-scanner-path }}"
+        echo "SonarScanner CLI version: ${{ steps.setup.outputs.sonar-scanner-version }}"
+
+    - name: Test with different version
+      uses: ./
+      with:
+        sonar-scanner-version: '6.2.0.4584'
+        cache: 'false'
+
+    - name: Verify second installation
+      shell: bash
+      run: |
+        echo "Testing sonar-scanner command with different version..."
+        sonar-scanner --version

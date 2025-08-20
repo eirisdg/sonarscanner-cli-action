@@ -1,0 +1,73 @@
+name: 'Setup SonarScanner CLI'
+description: 'Install SonarScanner CLI for cross-platform SonarQube/SonarCloud analysis'
+author: 'Mario Adrián Domínguez González de Eiris'
+
+branding:
+  icon: 'search'
+  color: 'blue'
+
+inputs:
+  sonar-scanner-version:
+    description: 'Version of SonarScanner CLI to install'
+    required: false
+    default: '7.2.0.5079'
+  cache:
+    description: 'Enable caching of SonarScanner CLI installation'
+    required: false
+    default: 'true'
+
+outputs:
+  sonar-scanner-version:
+    description: 'The version of SonarScanner CLI that was installed'
+    value: ${{ steps.install.outputs.version }}
+  sonar-scanner-path:
+    description: 'Path to the SonarScanner CLI installation'
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Detect platform'
+      id: platform
+      shell: bash
+      run: |
+        case "${{ runner.os }}" in
+          Linux)
+            echo "os=linux" >> $GITHUB_OUTPUT
+            echo "script=install-sonar-scanner.sh" >> $GITHUB_OUTPUT
+            echo "shell=bash" >> $GITHUB_OUTPUT
+            ;;
+          macOS)
+            echo "os=macos" >> $GITHUB_OUTPUT
+            echo "script=install-sonar-scanner.sh" >> $GITHUB_OUTPUT
+            echo "shell=bash" >> $GITHUB_OUTPUT
+            ;;
+          Windows)
+            echo "os=windows" >> $GITHUB_OUTPUT
+            echo "script=install-sonar-scanner.ps1" >> $GITHUB_OUTPUT
+            echo "shell=pwsh" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "::error::Unsupported operating system: ${{ runner.os }}"
+            exit 1
+            ;;
+        esac
+
+    - name: 'Cache SonarScanner CLI'
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.sonar-scanner
+          ~/AppData/Local/SonarScanner
+        key: sonar-scanner-${{ steps.platform.outputs.os }}-${{ inputs.sonar-scanner-version }}
+        restore-keys: |
+          sonar-scanner-${{ steps.platform.outputs.os }}-
+
+    - name: 'Install SonarScanner CLI'
+      id: install
+      shell: ${{ steps.platform.outputs.shell }}
+      env:
+        SONAR_SCANNER_VERSION: ${{ inputs.sonar-scanner-version }}
+        RUNNER_OS: ${{ runner.os }}
+      run: ${{ github.action_path }}/scripts/${{ steps.platform.outputs.script }}
