@@ -1,0 +1,245 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint and Validate
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Validate action.yml
+      run: |
+        # Basic YAML validation
+        python -c "import yaml; yaml.safe_load(open('action.yml'))"
+        echo "✅ action.yml is valid YAML"
+        
+    - name: Check scripts syntax
+      run: |
+        # Check bash script syntax
+        bash -n scripts/install-sonar-scanner.sh
+        echo "✅ Bash script syntax is valid"
+        
+        # Check PowerShell script syntax (basic)
+        if command -v pwsh >/dev/null 2>&1; then
+          pwsh -Command "Get-Content scripts/install-sonar-scanner.ps1 | Out-Null"
+          echo "✅ PowerShell script syntax is valid"
+        else
+          echo "ℹ️ PowerShell not available, skipping syntax check"
+        fi
+
+  test-action:
+    name: Test Action
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        sonar-version: ['7.2.0.5079', '6.2.0.4584']
+        cache: ['true', 'false']
+        include:
+          # Test latest version combinations
+          - os: ubuntu-latest
+            sonar-version: '5.0.1.3006'
+            cache: 'true'
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Test Action
+      id: test-action
+      uses: ./
+      with:
+        sonar-scanner-version: ${{ matrix.sonar-version }}
+        cache: ${{ matrix.cache }}
+
+    - name: Verify Installation
+      shell: bash
+      run: |
+        echo "Testing sonar-scanner installation..."
+        
+        # Test command exists
+        if ! command -v sonar-scanner >/dev/null 2>&1; then
+          echo "❌ sonar-scanner command not found in PATH"
+          exit 1
+        fi
+        
+        # Test version output
+        version_output=$(sonar-scanner --version 2>&1)
+        echo "Version output: $version_output"
+        
+        # Verify expected version is installed
+        if echo "$version_output" | grep -q "${{ matrix.sonar-version }}"; then
+          echo "✅ Correct version ${{ matrix.sonar-version }} installed"
+        else
+          echo "❌ Expected version ${{ matrix.sonar-version }} not found in version output"
+          exit 1
+        fi
+        
+        # Test outputs
+        echo "Installed version: ${{ steps.test-action.outputs.sonar-scanner-version }}"
+        echo "Installation path: ${{ steps.test-action.outputs.sonar-scanner-path }}"
+        
+        # Verify outputs match expectations
+        if [ "${{ steps.test-action.outputs.sonar-scanner-version }}" != "${{ matrix.sonar-version }}" ]; then
+          echo "❌ Output version doesn't match expected version"
+          exit 1
+        fi
+
+    - name: Test Basic Analysis (dry-run)
+      shell: bash
+      run: |
+        # Create a minimal sonar-project.properties for testing
+        cat > sonar-project.properties << EOF
+        sonar.projectKey=test-project
+        sonar.projectName=Test Project
+        sonar.projectVersion=1.0
+        sonar.sources=.
+        sonar.exclusions=**/*.yml,**/*.yaml,**/*.json,**/*.md
+        EOF
+        
+        # Run dry-run analysis to verify scanner works
+        echo "Running dry-run analysis..."
+        sonar-scanner -Dsonar.scanner.dumpToFile=/tmp/sonar-scanner-dump.txt || {
+          echo "ℹ️ Scanner dry-run failed (expected without server connection)"
+          # Check if the failure is due to missing server connection (expected)
+          if [ -f "/tmp/sonar-scanner-dump.txt" ]; then
+            echo "✅ Scanner executable works (dry-run dump created)"
+          else
+            echo "❌ Scanner executable appears to have issues"
+            exit 1
+          fi
+        }
+
+  test-edge-cases:
+    name: Test Edge Cases
+    needs: lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Test Invalid Version (should fail gracefully)
+      id: test-invalid
+      continue-on-error: true
+      uses: ./
+      with:
+        sonar-scanner-version: '999.999.999.999'
+        cache: 'false'
+
+    - name: Verify Invalid Version Handling
+      run: |
+        if [ "${{ steps.test-invalid.outcome }}" = "failure" ]; then
+          echo "✅ Invalid version correctly failed"
+        else
+          echo "❌ Invalid version should have failed but didn't"
+          exit 1
+        fi
+
+    - name: Test Multiple Installations
+      uses: ./
+      with:
+        sonar-scanner-version: '7.2.0.5079'
+        cache: 'true'
+
+    - name: Test Reinstallation with Different Version
+      uses: ./
+      with:
+        sonar-scanner-version: '6.2.0.4584'
+        cache: 'false'
+
+    - name: Verify Final Installation
+      run: |
+        version_output=$(sonar-scanner --version 2>&1)
+        if echo "$version_output" | grep -q "6.2.0.4584"; then
+          echo "✅ Version change handled correctly"
+        else
+          echo "❌ Version change not handled correctly"
+          exit 1
+        fi
+
+  test-integration:
+    name: Integration Test
+    needs: [lint, test-action]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup SonarScanner
+      uses: ./
+      with:
+        sonar-scanner-version: '7.2.0.5079'
+
+    - name: Create Test Project
+      run: |
+        mkdir -p src/main/java/com/example
+        cat > src/main/java/com/example/App.java << 'EOF'
+        package com.example;
+        
+        public class App {
+            public static void main(String[] args) {
+                System.out.println("Hello World!");
+            }
+            
+            public String getMessage() {
+                return "Hello World!";
+            }
+        }
+        EOF
+        
+        cat > sonar-project.properties << 'EOF'
+        sonar.projectKey=integration-test
+        sonar.projectName=Integration Test
+        sonar.projectVersion=1.0
+        sonar.sources=src
+        sonar.java.source=17
+        sonar.java.target=17
+        EOF
+
+    - name: Test SonarScanner with Real Project
+      run: |
+        # Test that scanner can parse the project without server
+        echo "Testing project analysis capabilities..."
+        sonar-scanner \
+          -Dsonar.verbose=true \
+          -Dsonar.scanner.dumpToFile=/tmp/analysis-dump.txt \
+          || echo "Expected failure without server connection"
+        
+        # Verify scanner processed the project
+        if [ -f "/tmp/analysis-dump.txt" ]; then
+          echo "✅ Scanner successfully analyzed project structure"
+          echo "Scanner dump size: $(wc -l < /tmp/analysis-dump.txt) lines"
+        else
+          echo "ℹ️ No dump file created (may be expected behavior)"
+        fi

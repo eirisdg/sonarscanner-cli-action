@@ -1,6 +1,7 @@
-name: 'Setup SonarScanner CLI'
+name: 'SonarScanner CLI Action'
 description: >-
-  Install SonarScanner CLI for cross-platform SonarQube/SonarCloud analysis
+  Cross-platform GitHub Action to install SonarScanner CLI for SonarQube/SonarCloud analysis.
+  Supports Windows, Linux, and macOS with automatic caching and version management.
 author: 'Mario Adrián Domínguez González de Eiris'
 
 branding:

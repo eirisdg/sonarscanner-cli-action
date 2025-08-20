@@ -1,6 +1,32 @@
 # SonarScanner CLI Action
 
+[![CI](https://github.com/eirisdg/sonarscanner-cli-action/actions/workflows/ci.yml/badge.svg)](https://github.com/eirisdg/sonarscanner-cli-action/actions/workflows/ci.yml)
+[![Security](https://github.com/eirisdg/sonarscanner-cli-action/actions/workflows/security.yml/badge.svg)](https://github.com/eirisdg/sonarscanner-cli-action/actions/workflows/security.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release](https://img.shields.io/github/release/eirisdg/sonarscanner-cli-action.svg)](https://github.com/eirisdg/sonarscanner-cli-action/releases)
+[![GitHub marketplace](https://img.shields.io/badge/marketplace-sonarscanner--cli--action-blue?logo=github)](https://github.com/marketplace/actions/sonarscanner-cli-action)
+
 A cross-platform GitHub Action that installs the SonarScanner CLI for use with SonarQube and SonarCloud analysis.
+
+## Quick Start
+
+```yaml
+- name: Setup SonarScanner CLI
+  uses: eirisdg/sonarscanner-cli-action@v1
+
+- name: Run SonarQube Analysis
+  env:
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  run: sonar-scanner -Dsonar.projectKey=my-project -Dsonar.sources=.
+```
+
+## Why Use This Action?
+
+- ✅ **Zero Configuration**: Works out of the box on all GitHub runners
+- ✅ **Fast**: Intelligent caching reduces setup time to seconds
+- ✅ **Reliable**: Comprehensive error handling and validation
+- ✅ **Current**: Always supports the latest SonarScanner CLI versions
+- ✅ **Secure**: Regular security scanning and dependency updates
 
 ## Features
 
@@ -173,7 +199,19 @@ If downloads fail, check:
 
 ## Contributing
 
-Contributions are welcome! Please read the contributing guidelines and submit pull requests to the main repository.
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) and submit pull requests to the main repository.
+
+## Documentation
+
+- [Advanced Usage Examples](docs/advanced-usage.md)
+- [Troubleshooting Guide](docs/troubleshooting.md)
+- [Changelog](CHANGELOG.md)
+
+## Support
+
+- 🐛 [Report a bug](https://github.com/eirisdg/sonarscanner-cli-action/issues/new?template=bug_report.md)
+- 💡 [Request a feature](https://github.com/eirisdg/sonarscanner-cli-action/issues/new?template=feature_request.md)
+- ❓ [Ask a question](https://github.com/eirisdg/sonarscanner-cli-action/issues/new?template=question.md)
 
 ## License
 
