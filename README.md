@@ -40,6 +40,7 @@ This action allows you to perform static code analysis with SonarQube and SonarC
 | `sonar-exclusions` | Files/directories to exclude | ❌ | - |
 | `sonar-inclusions` | Files/directories to include specifically | ❌ | - |
 | `sonar-encoding` | Source file encoding | ❌ | `UTF-8` |
+| `sonar-scanner-version` | SonarScanner CLI version to use | ❌ | `latest` |
 | `working-directory` | Working directory | ❌ | `.` |
 
 #### Branch & Pull Request Analysis
@@ -56,11 +57,18 @@ This action allows you to perform static code analysis with SonarQube and SonarC
 
 | Parameter | Description | Required | Default Value |
 |-----------|-------------|----------|---------------|
-| `sonar-verbose` | Enable verbose logging | ❌ | `false` |
+| `sonar-verbose` | Enable verbose logging (equivalent to `-X,--debug`) | ❌ | `false` |
 | `sonar-log-level` | Log level (INFO, DEBUG) | ❌ | `INFO` |
 | `enable-jacoco` | Enable JaCoCo coverage analysis | ❌ | `false` |
 | `enable-eslint` | Enable ESLint analysis integration | ❌ | `false` |
 | `enable-hadolint` | Enable Hadolint Docker linting | ❌ | `false` |
+
+**SonarScanner CLI Command Line Options:**
+The action handles all standard SonarScanner CLI command line options:
+- `-X, --debug`: Enable debug output (controlled by `sonar-verbose`)
+- `-D, --define`: Define properties (handled through individual parameters and `extra-args`)
+- `-h, --help`: Display help (handled internally)
+- `-v, --version`: Display version (handled internally)
 
 #### Custom Arguments
 
@@ -83,6 +91,30 @@ No manual language configuration is required in most cases. However, you can ove
 extra-args: '-Dsonar.language=java'  # Force specific language
 ```
 
+### SonarScanner CLI Version
+
+This action **automatically uses the latest SonarScanner CLI version** by default, ensuring you always have access to the newest features and improvements. You can also specify a particular version if needed:
+
+| Version Setting | Description | Example |
+|----------------|-------------|---------|
+| `latest` (default) | Always uses the most recent SonarScanner CLI release | `sonar-scanner-version: 'latest'` |
+| Specific version | Uses an exact SonarScanner CLI version | `sonar-scanner-version: '7.2.0.5079'` |
+| Major version | Uses the latest patch in a major version | `sonar-scanner-version: '7.x'` |
+
+**Current Latest Version:** `7.2.0.5079`
+
+```yaml
+# Use latest version (default)
+- uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-scanner-version: 'latest'
+
+# Use specific version
+- uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-scanner-version: '7.2.0.5079'
+```
+
 ### Basic Configuration
 
 #### Basic Analysis
@@ -97,6 +129,7 @@ steps:
     sonar-token: ${{ secrets.SONAR_TOKEN }}
     sonar-project-key: 'my-project-key'
     sonar-project-name: 'My Project'
+    sonar-scanner-version: 'latest'  # Uses latest SonarScanner CLI version
 ```
 
 #### SonarCloud Analysis
@@ -111,6 +144,7 @@ steps:
     sonar-token: ${{ secrets.SONAR_TOKEN }}
     sonar-organization: 'my-organization'
     sonar-project-key: 'my-organization_my-project'
+    sonar-scanner-version: '7.2.0.5079'  # Specific version
 ```
 
 ### Advanced Configuration
@@ -374,6 +408,7 @@ extra-args: |
 - Valid authentication token
 - Repository read permissions
 - Git history (use `fetch-depth: 0` for better analysis)
+- **SonarScanner CLI**: This action automatically downloads and uses the latest SonarScanner CLI version (currently `7.2.0.5079`) or a specified version
 
 ## Recommended Permissions
 
