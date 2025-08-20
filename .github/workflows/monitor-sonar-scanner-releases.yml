@@ -1,0 +1,144 @@
+name: Monitor SonarScanner CLI Releases
+
+on:
+  schedule:
+    # Ejecutar todos los días a las 09:00 UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Permitir ejecución manual
+
+jobs:
+  check-new-releases:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest SonarScanner CLI release
+        id: get-latest-release
+        run: |
+          # Obtener la última release del repositorio oficial
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/SonarSource/sonar-scanner-cli/releases/latest)
+          
+          # Verificar si la respuesta es válida
+          if echo "$LATEST_RELEASE" | jq -e . >/dev/null 2>&1; then
+            LATEST_VERSION=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
+            RELEASE_URL=$(echo "$LATEST_RELEASE" | jq -r '.html_url')
+            RELEASE_BODY=$(echo "$LATEST_RELEASE" | jq -r '.body')
+            RELEASE_DATE=$(echo "$LATEST_RELEASE" | jq -r '.published_at')
+            
+            # Verificar que obtuvimos datos válidos
+            if [ "$LATEST_VERSION" != "null" ] && [ -n "$LATEST_VERSION" ]; then
+              echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+              echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+              echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
+              
+              # Guardar el cuerpo de la release en un archivo temporal
+              echo "$RELEASE_BODY" > release_body.txt
+              
+              echo "Latest SonarScanner CLI version: $LATEST_VERSION"
+            else
+              echo "Error: No se pudo obtener información válida de la versión"
+              exit 1
+            fi
+          else
+            echo "Error: Respuesta inválida de la API de GitHub"
+            echo "Respuesta: $LATEST_RELEASE"
+            exit 1
+          fi
+
+      - name: Get stored version
+        id: get-stored-version
+        run: |
+          if [ -f ".sonar-scanner-version" ]; then
+            STORED_VERSION=$(cat .sonar-scanner-version)
+            echo "stored_version=$STORED_VERSION" >> $GITHUB_OUTPUT
+            echo "Stored version: $STORED_VERSION"
+          else
+            echo "stored_version=" >> $GITHUB_OUTPUT
+            echo "No stored version found"
+          fi
+
+      - name: Check if new version is available
+        id: check-version
+        run: |
+          LATEST="${{ steps.get-latest-release.outputs.latest_version }}"
+          STORED="${{ steps.get-stored-version.outputs.stored_version }}"
+          
+          if [ "$LATEST" != "$STORED" ]; then
+            echo "new_version_available=true" >> $GITHUB_OUTPUT
+            echo "New version available: $LATEST (stored: $STORED)"
+          else
+            echo "new_version_available=false" >> $GITHUB_OUTPUT
+            echo "No new version available"
+          fi
+
+      - name: Create issue for new release
+        if: steps.check-version.outputs.new_version_available == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const version = '${{ steps.get-latest-release.outputs.latest_version }}';
+            const releaseUrl = '${{ steps.get-latest-release.outputs.release_url }}';
+            const releaseDate = '${{ steps.get-latest-release.outputs.release_date }}';
+            const releaseBody = fs.readFileSync('release_body.txt', 'utf8');
+            
+            const issueTitle = `Nueva versión de SonarScanner CLI disponible: ${version}`;
+            const issueBody = `## 🚀 Nueva versión de SonarScanner CLI disponible
+
+            ### Información de la versión
+            - **Versión**: ${version}
+            - **Fecha de publicación**: ${new Date(releaseDate).toLocaleDateString('es-ES')}
+            - **URL de la release**: ${releaseUrl}
+
+            ### Cambios incluidos
+
+            ${releaseBody}
+
+            ### Tareas a realizar
+
+            - [ ] Revisar los cambios de la nueva versión
+            - [ ] Actualizar dependencias si es necesario
+            - [ ] Ejecutar todos los tests
+            - [ ] Actualizar documentación
+            - [ ] Verificar compatibilidad
+            - [ ] Actualizar ejemplos si es necesario
+            - [ ] Crear release en este repositorio
+
+            ### Notas importantes
+
+            - Esta issue fue creada automáticamente por el workflow de monitoreo
+            - Revisar cuidadosamente los cambios antes de actualizar
+            - Asegurar que todos los tests pasan después de la actualización
+
+            ---
+            *Generado automáticamente por el sistema de monitoreo de releases*`;
+
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: ['sonar-scanner-update', 'automation']
+            });
+
+            console.log(`Issue creada: ${issue.html_url}`);
+
+      - name: Update stored version
+        if: steps.check-version.outputs.new_version_available == 'true'
+        run: |
+          echo "${{ steps.get-latest-release.outputs.latest_version }}" > .sonar-scanner-version
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .sonar-scanner-version
+          git commit -m "Actualizar versión monitoreada de SonarScanner CLI a ${{ steps.get-latest-release.outputs.latest_version }}"
+          git push
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -f release_body.txt
