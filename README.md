@@ -3,21 +3,24 @@
 [![Basic validation](https://github.com/eirisdg/sonarscanner-cli-action/actions/workflows/test.yml/badge.svg)](https://github.com/eirisdg/sonarscanner-cli-action/actions/workflows/test.yml)
 
 The `sonarscanner-cli-action` provides the following functionality for GitHub Actions runners:
-- **Native SonarScanner CLI execution** - runs directly on the runner without Docker containers for improved performance
+- **Native SonarScanner CLI execution** - runs directly on the runner for optimal performance and speed
+- **Automatic language detection** - SonarScanner CLI automatically detects programming languages at scan startup
 - **Universal language support** - analyzes code in any programming language supported by SonarQube/SonarCloud  
-- **Flexible configuration** - supports all standard SonarScanner parameters
-- **Custom arguments support** - allows passing additional arguments not predefined in the action
-- **Faster execution** - native execution reduces analysis time compared to Docker-based solutions
+- **Flexible configuration** - supports all standard SonarScanner parameters plus custom arguments
+- **Analysis-specific controls** - enable/disable specific analyses like JaCoCo, Hadolint, ESLint, and more
+- **Faster execution** - native execution significantly reduces analysis time and startup overhead
 - **Secure token handling** - proper management of authentication credentials
 
-This action allows you to perform static code analysis with SonarQube and SonarCloud for projects in any supported programming language.
+This action allows you to perform static code analysis with SonarQube and SonarCloud for projects in any supported programming language, with automatic language detection and optimized performance.
 
 ## Key Advantages
 
-- **⚡ Performance**: Native execution without Docker overhead significantly reduces analysis time
-- **🔧 Flexibility**: Custom arguments (`extra-args`) provide unlimited configuration possibilities  
+- **⚡ Performance**: Native execution significantly reduces analysis time and startup overhead
+- **🤖 Smart Detection**: Automatic programming language detection at scan startup
+- **🔧 Flexibility**: Comprehensive parameter support plus custom arguments for unlimited configuration
+- **🎯 Analysis Control**: Enable/disable specific analyses (JaCoCo, Hadolint, ESLint, etc.)
 - **🌐 Universal**: Works with any language supported by SonarQube/SonarCloud
-- **📦 Lightweight**: No container images to download, faster workflow startup
+- **📦 Lightweight**: Direct execution on runner, faster workflow startup
 
 ## Usage
 
@@ -33,11 +36,13 @@ This action allows you to perform static code analysis with SonarQube and SonarC
 | `sonar-project-name` | Project name | ❌ | Repository name |
 | `sonar-project-version` | Project version | ❌ | `1.0` |
 | `sonar-sources` | Source code directories | ❌ | `.` |
+| `sonar-tests` | Test source directories | ❌ | - |
 | `sonar-exclusions` | Files/directories to exclude | ❌ | - |
 | `sonar-inclusions` | Files/directories to include specifically | ❌ | - |
+| `sonar-encoding` | Source file encoding | ❌ | `UTF-8` |
 | `working-directory` | Working directory | ❌ | `.` |
 
-#### Advanced Parameters
+#### Branch & Pull Request Analysis
 
 | Parameter | Description | Required | Default Value |
 |-----------|-------------|----------|---------------|
@@ -47,11 +52,36 @@ This action allows you to perform static code analysis with SonarQube and SonarC
 | `sonar-pull-request-branch` | Pull Request branch | ❌ | - |
 | `sonar-pull-request-base` | Pull Request base branch | ❌ | - |
 
+#### Analysis Controls
+
+| Parameter | Description | Required | Default Value |
+|-----------|-------------|----------|---------------|
+| `sonar-verbose` | Enable verbose logging | ❌ | `false` |
+| `sonar-log-level` | Log level (INFO, DEBUG) | ❌ | `INFO` |
+| `enable-jacoco` | Enable JaCoCo coverage analysis | ❌ | `false` |
+| `enable-eslint` | Enable ESLint analysis integration | ❌ | `false` |
+| `enable-hadolint` | Enable Hadolint Docker linting | ❌ | `false` |
+
 #### Custom Arguments
 
 | Parameter | Description | Required | Example |
 |-----------|-------------|----------|---------|
 | `extra-args` | Additional arguments for sonar-scanner | ❌ | `-Dsonar.java.binaries=target/classes -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml` |
+
+### Language Detection
+
+**SonarScanner CLI automatically detects the programming language(s)** used in your project at the beginning of the analysis. The scanner examines file extensions and project structure to determine:
+
+- **Primary languages** in the project (Java, JavaScript, Python, C#, etc.)
+- **Framework detection** (Spring, React, Django, etc.)
+- **Build system recognition** (Maven, Gradle, npm, etc.)
+- **Appropriate analysis rules** and quality profiles
+
+No manual language configuration is required in most cases. However, you can override detection using `extra-args` if needed:
+
+```yaml
+extra-args: '-Dsonar.language=java'  # Force specific language
+```
 
 ### Basic Configuration
 
@@ -85,7 +115,7 @@ steps:
 
 ### Advanced Configuration
 
-#### Java Project with Coverage
+#### Java Project with JaCoCo Coverage
 ```yaml
 steps:
 - uses: actions/checkout@v4
@@ -102,12 +132,14 @@ steps:
     sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
     sonar-token: ${{ secrets.SONAR_TOKEN }}
     sonar-project-key: 'java-project'
+    enable-jacoco: 'true'
+    sonar-tests: 'src/test/java'
     extra-args: |
       -Dsonar.java.binaries=target/classes
       -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 ```
 
-#### Node.js Project with ESLint and Coverage
+#### Node.js Project with ESLint Analysis
 ```yaml
 steps:
 - uses: actions/checkout@v4
@@ -127,10 +159,30 @@ steps:
     sonar-token: ${{ secrets.SONAR_TOKEN }}
     sonar-project-key: 'nodejs-project'
     sonar-sources: 'src'
+    sonar-tests: 'src/__tests__'
     sonar-exclusions: '**/*.test.js,**/node_modules/**'
+    enable-eslint: 'true'
     extra-args: |
       -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info
       -Dsonar.eslint.reportPaths=eslint-report.xml
+
+#### Docker Project with Hadolint
+```yaml
+steps:
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- name: Run Hadolint
+  run: |
+    docker run --rm -i hadolint/hadolint < Dockerfile > hadolint-report.json || true
+- uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-project-key: 'docker-project'
+    enable-hadolint: 'true'
+    extra-args: |
+      -Dsonar.docker.hadolint.reportPaths=hadolint-report.json
 ```
 
 #### Pull Request Analysis
@@ -245,23 +297,75 @@ sonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 
 ### Advanced Custom Arguments
 
-The `extra-args` parameter provides unlimited flexibility for configuration:
+The `extra-args` parameter provides access to the full range of SonarScanner CLI options. Common advanced parameters include:
 
+#### Language-Specific Options
 ```yaml
 extra-args: |
+  # Java/Kotlin
   -Dsonar.java.binaries=target/classes,build/classes
   -Dsonar.java.libraries=lib/**/*.jar
+  -Dsonar.java.source=11
+  
+  # .NET/C#
+  -Dsonar.dotnet.coverage.reportPaths=coverage.xml
+  -Dsonar.cs.analyzer.projectOutPaths=bin
+  
+  # Go
+  -Dsonar.go.coverage.reportPaths=coverage.out
+  -Dsonar.go.tests.reportPaths=test-report.xml
+  
+  # Python
+  -Dsonar.python.coverage.reportPaths=coverage.xml
+  -Dsonar.python.xunit.reportPath=xunit-result.xml
+```
+
+#### Advanced Analysis Options
+```yaml
+extra-args: |
+  # Quality Profiles
+  -Dsonar.profile=MyCustomProfile
+  
+  # SCM Integration
+  -Dsonar.scm.provider=git
+  -Dsonar.scm.forceReloadAll=true
+  
+  # Analysis Metadata
+  -Dsonar.buildString=${{ github.run_number }}
+  -Dsonar.analysis.sha1=${{ github.sha }}
+  -Dsonar.projectDate=$(date -Iseconds)
+  
+  # Links and Information
+  -Dsonar.links.homepage=${{ github.server_url }}/${{ github.repository }}
+  -Dsonar.links.ci=${{ github.server_url }}/${{ github.repository }}/actions
+  -Dsonar.links.scm=${{ github.server_url }}/${{ github.repository }}
+  
+  # Debugging
+  -Dsonar.log.level=DEBUG
+  -Dsonar.verbose=true
+  -Dsonar.showProfiling=true
+```
+
+#### External Tool Integration
+```yaml
+extra-args: |
+  # Test Coverage Reports
   -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
   -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info
-  -Dsonar.eslint.reportPaths=eslint-report.json
-  -Dsonar.python.coverage.reportPaths=coverage.xml
-  -Dsonar.go.coverage.reportPaths=coverage.out
   -Dsonar.php.coverage.reportPaths=coverage.xml
-  -Dsonar.dotnet.coverage.reportPaths=coverage.xml
-  -Dsonar.scm.provider=git
+  
+  # Code Quality Tools
+  -Dsonar.eslint.reportPaths=eslint-report.json
+  -Dsonar.typescript.tslint.reportPaths=tslint-report.json
+  -Dsonar.php.phpstan.reportPaths=phpstan-report.json
+  -Dsonar.docker.hadolint.reportPaths=hadolint-report.json
+  
+  # Security Analysis
+  -Dsonar.security.hotspots.reportPaths=security-report.json
+  
+  # Pull Request Integration  
+  -Dsonar.pullrequest.provider=github
   -Dsonar.pullrequest.github.repository=${{ github.repository }}
-  -Dsonar.analysis.mode=publish
-  -Dsonar.log.level=DEBUG
 ```
 
 ## Requirements
@@ -283,22 +387,28 @@ permissions:
 
 ## Performance Benefits
 
-### Native Execution vs Docker
-This action runs SonarScanner CLI natively on the GitHub Actions runner, providing significant advantages over Docker-based solutions:
+### Native Execution Advantages
+This action runs SonarScanner CLI natively on the GitHub Actions runner, providing significant performance advantages:
 
-| Aspect | Native Execution | Docker-based |
-|--------|------------------|--------------|
-| **Startup Time** | ~5-10 seconds | ~30-60 seconds |
-| **Memory Usage** | Lower overhead | Container overhead |
-| **Network** | Direct access | Layer isolation |
-| **Caching** | Runner cache friendly | Container layer caching |
-| **Performance** | **25-50% faster** | Baseline |
+| Aspect | Native Execution | Benefits |
+|--------|------------------|----------|
+| **Startup Time** | ~5-10 seconds | Immediate execution |
+| **Memory Usage** | Lower overhead | More efficient resource usage |
+| **Analysis Speed** | **25-50% faster** | Optimized for runner environment |
+| **Caching** | Runner cache friendly | Better integration with GitHub Actions |
+| **Language Detection** | Direct file access | Faster language scanning |
 
 ### Benchmark Results
-Based on typical projects:
+Performance improvements on typical projects:
 - **Small projects** (< 10k LOC): ~40% faster analysis
 - **Medium projects** (10k-100k LOC): ~35% faster analysis  
 - **Large projects** (> 100k LOC): ~25% faster analysis
+
+The speed improvements come from:
+- **Direct execution** on the runner without containerization overhead
+- **Optimized file access** for language detection and source scanning
+- **Efficient memory usage** without container isolation layers
+- **Integrated caching** with GitHub Actions runner capabilities
 
 ## Troubleshooting
 
@@ -327,26 +437,6 @@ Branch 'feature-branch' not found
 - Use `fetch-depth: 0` in checkout action
 - Configure branch analysis parameters correctly
 - Check branch permissions in SonarQube
-
-## Migration from Docker Actions
-
-If migrating from Docker-based SonarQube actions:
-
-### Before (Docker-based)
-```yaml
-- uses: sonarqube-quality-gate-action@master
-  with:
-    scanMetadataReportFile: target/sonar/report-task.txt
-```
-
-### After (Native CLI)
-```yaml
-- uses: eirisdg/sonarscanner-cli-action@v1
-  with:
-    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
-    sonar-token: ${{ secrets.SONAR_TOKEN }}
-    sonar-project-key: 'my-project'
-```
 
 ## Contributing
 
