@@ -1,5 +1,6 @@
 name: 'Setup SonarScanner CLI'
-description: 'Install SonarScanner CLI for cross-platform SonarQube/SonarCloud analysis'
+description: >-
+  Install SonarScanner CLI for cross-platform SonarQube/SonarCloud analysis
 author: 'Mario Adrián Domínguez González de Eiris'
 
 branding:
@@ -60,7 +61,8 @@ runs:
         path: |
           ~/.sonar-scanner
           ~/AppData/Local/SonarScanner
-        key: sonar-scanner-${{ steps.platform.outputs.os }}-${{ inputs.sonar-scanner-version }}
+        key: >-
+          sonar-scanner-${{ steps.platform.outputs.os }}-${{ inputs.sonar-scanner-version }}
         restore-keys: |
           sonar-scanner-${{ steps.platform.outputs.os }}-
 
@@ -70,4 +72,5 @@ runs:
       env:
         SONAR_SCANNER_VERSION: ${{ inputs.sonar-scanner-version }}
         RUNNER_OS: ${{ runner.os }}
-      run: ${{ github.action_path }}/scripts/${{ steps.platform.outputs.script }}
+      run: >-
+        ${{ github.action_path }}/scripts/${{ steps.platform.outputs.script }}
