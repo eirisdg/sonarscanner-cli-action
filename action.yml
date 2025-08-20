@@ -6,7 +6,7 @@ author: 'Mario Adrián Domínguez González de Eiris'
 
 branding:
   icon: 'search'
-  color: 'blue'
+  color: 'purple'
 
 inputs:
   sonar-scanner-version:
