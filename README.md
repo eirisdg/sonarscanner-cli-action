@@ -12,12 +12,19 @@ A cross-platform GitHub Action that installs the SonarScanner CLI for use with S
 
 ```yaml
 - name: Setup SonarScanner CLI
+  id: setup-sonar
   uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    wait-for-quality-gate: 'true'
 
 - name: Run SonarQube Analysis
   env:
     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  run: sonar-scanner -Dsonar.projectKey=my-project -Dsonar.sources=.
+  run: |
+    sonar-scanner \
+      -Dsonar.projectKey=my-project \
+      -Dsonar.sources=. \
+      -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }}
 ```
 
 ## Why Use This Action?
@@ -33,6 +40,7 @@ A cross-platform GitHub Action that installs the SonarScanner CLI for use with S
 - ✅ **Cross-platform support** - Works on Windows, Linux, and macOS runners
 - ✅ **Configurable version** - Install any available SonarScanner CLI version
 - ✅ **Caching support** - Optional caching to speed up subsequent runs
+- ✅ **Quality Gate support** - Optional waiting for Quality Gate results
 - ✅ **Automatic PATH setup** - SonarScanner CLI is automatically added to PATH
 - ✅ **Verification** - Installation is verified before completion
 
@@ -53,6 +61,7 @@ A cross-platform GitHub Action that installs the SonarScanner CLI for use with S
   with:
     sonar-scanner-version: '7.2.0.5079'
     cache: 'true'
+    wait-for-quality-gate: 'true'
 ```
 
 ### Complete Example
@@ -77,9 +86,11 @@ jobs:
         fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
     - name: Setup SonarScanner CLI
+      id: setup-sonar
       uses: eirisdg/sonarscanner-cli-action@v1
       with:
         sonar-scanner-version: '7.2.0.5079'
+        wait-for-quality-gate: 'true'
 
     - name: Run SonarQube analysis
       env:
@@ -90,7 +101,8 @@ jobs:
           -Dsonar.projectKey=my-project \
           -Dsonar.sources=. \
           -Dsonar.host.url=$SONAR_HOST_URL \
-          -Dsonar.login=$SONAR_TOKEN
+          -Dsonar.login=$SONAR_TOKEN \
+          -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }}
 ```
 
 ### Multi-platform Example
@@ -113,13 +125,19 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Setup SonarScanner CLI
+      id: setup-sonar
       uses: eirisdg/sonarscanner-cli-action@v1
+      with:
+        wait-for-quality-gate: 'true'
 
     - name: Run analysis
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
-        sonar-scanner -Dsonar.projectKey=my-project -Dsonar.sources=.
+        sonar-scanner \
+          -Dsonar.projectKey=my-project \
+          -Dsonar.sources=. \
+          -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }}
 ```
 
 ## Inputs
@@ -128,6 +146,7 @@ jobs:
 |-------|-------------|----------|---------|
 | `sonar-scanner-version` | Version of SonarScanner CLI to install | No | `7.2.0.5079` |
 | `cache` | Enable caching of SonarScanner CLI installation | No | `true` |
+| `wait-for-quality-gate` | Wait for SonarQube Quality Gate result before completing | No | `false` |
 
 ## Outputs
 
@@ -135,6 +154,7 @@ jobs:
 |--------|-------------|
 | `sonar-scanner-version` | The version of SonarScanner CLI that was installed |
 | `sonar-scanner-path` | Path to the SonarScanner CLI installation |
+| `quality-gate-wait` | Quality gate wait parameter value for sonar-scanner command |
 
 ## Requirements
 
@@ -161,6 +181,29 @@ The action supports caching to improve performance on subsequent runs. Caching i
 ```
 
 The cache key includes the OS and SonarScanner version, ensuring proper cache invalidation when needed.
+
+## Quality Gate
+
+The action supports waiting for SonarQube Quality Gate results. When enabled, the analysis will wait for SonarQube to process the code and return the Quality Gate status:
+
+```yaml
+- name: Setup SonarScanner CLI
+  id: setup-sonar
+  uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    wait-for-quality-gate: 'true'
+
+- name: Run SonarQube analysis
+  env:
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  run: |
+    sonar-scanner \
+      -Dsonar.projectKey=my-project \
+      -Dsonar.sources=. \
+      -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }}
+```
+
+When `wait-for-quality-gate` is set to `true`, the analysis will fail if the Quality Gate fails, making it useful for blocking deployments or merges based on code quality standards.
 
 ## Available Versions
 

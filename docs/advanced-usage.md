@@ -65,7 +65,10 @@ steps:
 ### Pull Request Analysis
 ```yaml
 - name: Setup SonarScanner CLI
+  id: setup-sonar
   uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    wait-for-quality-gate: 'false'  # Usually disabled for PRs
 
 - name: Run PR Analysis
   if: github.event_name == 'pull_request'
@@ -77,13 +80,17 @@ steps:
       -Dsonar.projectKey=my-project \
       -Dsonar.pullrequest.key=${{ github.event.number }} \
       -Dsonar.pullrequest.branch=${{ github.head_ref }} \
-      -Dsonar.pullrequest.base=${{ github.base_ref }}
+      -Dsonar.pullrequest.base=${{ github.base_ref }} \
+      -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }}
 ```
 
 ### Quality Gate Enforcement
 ```yaml
 - name: Setup SonarScanner CLI
+  id: setup-sonar
   uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    wait-for-quality-gate: 'true'
 
 - name: Run Analysis with Quality Gate
   env:
@@ -91,11 +98,34 @@ steps:
   run: |
     sonar-scanner \
       -Dsonar.projectKey=my-project \
-      -Dsonar.qualitygate.wait=true \
+      -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }} \
       -Dsonar.qualitygate.timeout=300
     
     # The command will fail if quality gate fails
     echo "Quality gate passed successfully!"
+```
+
+### Quality Gate with Conditional Logic
+```yaml
+- name: Setup SonarScanner CLI
+  id: setup-sonar
+  uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    wait-for-quality-gate: ${{ github.ref == 'refs/heads/main' }}
+
+- name: Run Analysis
+  env:
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  run: |
+    sonar-scanner \
+      -Dsonar.projectKey=my-project \
+      -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }}
+    
+    if [ "${{ steps.setup-sonar.outputs.quality-gate-wait }}" = "true" ]; then
+      echo "Quality gate enforcement enabled for main branch"
+    else
+      echo "Quality gate enforcement disabled for feature branches"
+    fi
 ```
 
 ## Integration with Test Coverage

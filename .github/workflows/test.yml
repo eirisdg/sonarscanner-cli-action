@@ -16,6 +16,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         sonar-version: ['7.2.0.5079', '6.2.0.4584']
         cache: ['true', 'false']
+        wait-quality-gate: ['true', 'false']
     
     runs-on: ${{ matrix.os }}
     
@@ -35,6 +36,7 @@ jobs:
       with:
         sonar-scanner-version: ${{ matrix.sonar-version }}
         cache: ${{ matrix.cache }}
+        wait-for-quality-gate: ${{ matrix.wait-quality-gate }}
 
     - name: Verify installation
       shell: bash
@@ -43,10 +45,16 @@ jobs:
         sonar-scanner --version
         echo "SonarScanner CLI installed at: ${{ steps.setup.outputs.sonar-scanner-path }}"
         echo "SonarScanner CLI version: ${{ steps.setup.outputs.sonar-scanner-version }}"
+        echo "Quality gate wait setting: ${{ steps.setup.outputs.quality-gate-wait }}"
         
         # Verify outputs match expectations
         if [ "${{ steps.setup.outputs.sonar-scanner-version }}" != "${{ matrix.sonar-version }}" ]; then
           echo "❌ Output version doesn't match expected version"
+          exit 1
+        fi
+        
+        if [ "${{ steps.setup.outputs.quality-gate-wait }}" != "${{ matrix.wait-quality-gate }}" ]; then
+          echo "❌ Quality gate wait output doesn't match expected value"
           exit 1
         fi
 
@@ -143,6 +151,66 @@ jobs:
           exit 1
         fi
 
+  test-quality-gate:
+    name: Test Quality Gate Parameter
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Test quality gate enabled
+      id: setup-qg-true
+      uses: ./
+      with:
+        wait-for-quality-gate: 'true'
+
+    - name: Verify quality gate true output
+      shell: bash
+      run: |
+        if [ "${{ steps.setup-qg-true.outputs.quality-gate-wait }}" = "true" ]; then
+          echo "✅ Quality gate wait=true output correct"
+        else
+          echo "❌ Quality gate wait=true output incorrect: ${{ steps.setup-qg-true.outputs.quality-gate-wait }}"
+          exit 1
+        fi
+
+    - name: Test quality gate disabled
+      id: setup-qg-false
+      uses: ./
+      with:
+        wait-for-quality-gate: 'false'
+
+    - name: Verify quality gate false output
+      shell: bash
+      run: |
+        if [ "${{ steps.setup-qg-false.outputs.quality-gate-wait }}" = "false" ]; then
+          echo "✅ Quality gate wait=false output correct"
+        else
+          echo "❌ Quality gate wait=false output incorrect: ${{ steps.setup-qg-false.outputs.quality-gate-wait }}"
+          exit 1
+        fi
+
+    - name: Test default quality gate (should be false)
+      id: setup-qg-default
+      uses: ./
+
+    - name: Verify default quality gate output
+      shell: bash
+      run: |
+        if [ "${{ steps.setup-qg-default.outputs.quality-gate-wait }}" = "false" ]; then
+          echo "✅ Default quality gate wait=false output correct"
+        else
+          echo "❌ Default quality gate wait output incorrect: ${{ steps.setup-qg-default.outputs.quality-gate-wait }}"
+          exit 1
+        fi
+
   integration-test:
     name: Integration Test with Real Project
     runs-on: ubuntu-latest
@@ -158,9 +226,11 @@ jobs:
         java-version: '17'
 
     - name: Setup SonarScanner
+      id: setup-sonar
       uses: ./
       with:
         sonar-scanner-version: '7.2.0.5079'
+        wait-for-quality-gate: 'true'
 
     - name: Create test project
       run: |
@@ -191,9 +261,11 @@ jobs:
     - name: Test project analysis
       run: |
         echo "Testing SonarScanner with real project..."
+        echo "Quality gate wait parameter: ${{ steps.setup-sonar.outputs.quality-gate-wait }}"
         sonar-scanner \
           -Dsonar.verbose=true \
           -Dsonar.scanner.dumpToFile=/tmp/analysis-dump.txt \
+          -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }} \
           || echo "Expected failure without server connection"
         
         if [ -f "/tmp/analysis-dump.txt" ]; then
