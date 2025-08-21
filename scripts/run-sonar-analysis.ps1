@@ -148,6 +148,74 @@ function Install-SonarScanner {
     }
 }
 
+# Function to auto-detect JaCoCo coverage reports
+function Detect-JaCoCo {
+    $JaCoCoReports = @()
+    
+    # Common JaCoCo report locations
+    $PossiblePaths = @(
+        "target\site\jacoco\jacoco.xml",
+        "build\reports\jacoco\test\jacocoTestReport.xml",
+        "jacoco.xml",
+        "coverage\jacoco.xml"
+    )
+    
+    foreach ($Path in $PossiblePaths) {
+        if (Test-Path $Path) {
+            $JaCoCoReports += $Path
+        }
+    }
+    
+    return $JaCoCoReports -join ","
+}
+
+# Function to auto-detect ESLint configuration
+function Detect-ESLint {
+    # Check for ESLint configuration files
+    $ConfigFiles = @(
+        ".eslintrc",
+        ".eslintrc.js",
+        ".eslintrc.json",
+        ".eslintrc.yml",
+        ".eslintrc.yaml",
+        "eslint.config.js"
+    )
+    
+    foreach ($Config in $ConfigFiles) {
+        if (Test-Path $Config) {
+            return $true
+        }
+    }
+    
+    # Check package.json for eslint dependency
+    if ((Test-Path "package.json")) {
+        $PackageContent = Get-Content "package.json" -Raw
+        if ($PackageContent -match '"eslint"') {
+            return $true
+        }
+    }
+    
+    return $false
+}
+
+# Function to auto-detect Hadolint/Docker files
+function Detect-Hadolint {
+    # Check for Dockerfile or Hadolint configuration
+    $DockerFiles = @(
+        "Dockerfile*",
+        ".hadolint.yaml",
+        ".hadolint.yml"
+    )
+    
+    foreach ($Pattern in $DockerFiles) {
+        if (Get-ChildItem -Path . -Name $Pattern -ErrorAction SilentlyContinue) {
+            return $true
+        }
+    }
+    
+    return $false
+}
+
 # Function to build SonarScanner command
 function Build-SonarCommand {
     $ScannerExecutable = "$SonarScannerHome\bin\sonar-scanner.bat"
@@ -192,17 +260,35 @@ function Build-SonarCommand {
         $cmd += "-X"
     }
     
-    # Analysis integrations
-    if ($env:ENABLE_JACOCO -eq "true") {
-        Write-Info "JaCoCo integration enabled"
+    # Smart analysis integrations with auto-detection
+    if ($env:ENABLE_JACOCO -ne "false") {
+        $JaCoCoReports = Detect-JaCoCo
+        if ($JaCoCoReports) {
+            Write-Success "JaCoCo integration enabled - detected reports: $JaCoCoReports"
+            $cmd += "-Dsonar.coverage.jacoco.xmlReportPaths=$JaCoCoReports"
+        } else {
+            Write-Info "JaCoCo integration enabled but no reports detected"
+        }
     }
     
-    if ($env:ENABLE_ESLINT -eq "true") {
-        Write-Info "ESLint integration enabled"
+    if ($env:ENABLE_ESLINT -ne "false") {
+        $ESLintDetected = Detect-ESLint
+        if ($ESLintDetected) {
+            Write-Success "ESLint integration enabled - configuration detected"
+            $cmd += "-Dsonar.javascript.eslint.reportPaths=eslint-report.json"
+        } else {
+            Write-Info "ESLint integration enabled but no configuration detected"
+        }
     }
     
-    if ($env:ENABLE_HADOLINT -eq "true") {
-        Write-Info "Hadolint integration enabled"
+    if ($env:ENABLE_HADOLINT -ne "false") {
+        $HadolintDetected = Detect-Hadolint
+        if ($HadolintDetected) {
+            Write-Success "Hadolint integration enabled - Docker files detected"
+            $cmd += "-Dsonar.docker.dockerfile.reportPaths=hadolint-report.json"
+        } else {
+            Write-Info "Hadolint integration enabled but no Docker files detected"
+        }
     }
     
     # Add extra arguments

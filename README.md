@@ -74,9 +74,9 @@ This action allows you to perform static code analysis with SonarQube and SonarC
 |-----------|-------------|----------|---------------|
 | `sonar-verbose` | Enable verbose logging (equivalent to `-X,--debug`) | ❌ | `false` |
 | `sonar-log-level` | Log level (INFO, DEBUG) | ❌ | `INFO` |
-| `enable-jacoco` | Enable JaCoCo coverage analysis | ❌ | `false` |
-| `enable-eslint` | Enable ESLint analysis integration | ❌ | `false` |
-| `enable-hadolint` | Enable Hadolint Docker linting | ❌ | `false` |
+| `enable-jacoco` | Enable JaCoCo coverage analysis (auto-detects reports when enabled) | ❌ | `true` |
+| `enable-eslint` | Enable ESLint analysis integration (auto-detects configuration when enabled) | ❌ | `true` |
+| `enable-hadolint` | Enable Hadolint Docker linting (auto-detects Dockerfile when enabled) | ❌ | `true` |
 
 **SonarScanner CLI Command Line Options:**
 The action handles all standard SonarScanner CLI command line options:
@@ -90,6 +90,27 @@ The action handles all standard SonarScanner CLI command line options:
 | Parameter | Description | Required | Example |
 |-----------|-------------|----------|---------|
 | `extra-args` | Additional arguments for sonar-scanner | ❌ | `-Dsonar.java.binaries=target/classes -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml` |
+
+### Smart Analysis Detection
+
+The action includes **intelligent auto-detection** for common analysis tools and configurations. When enabled (default), these features automatically detect and configure:
+
+#### JaCoCo Coverage Analysis (`enable-jacoco: true`)
+- **Auto-detects**: `jacoco.xml`, `target/site/jacoco/jacoco.xml`, `build/reports/jacoco/test/jacocoTestReport.xml`
+- **Configures**: `sonar.coverage.jacoco.xmlReportPaths` automatically
+- **Works with**: Maven, Gradle, and standalone JaCoCo reports
+
+#### ESLint Integration (`enable-eslint: true`)
+- **Auto-detects**: `.eslintrc*` files, `eslint.config.js`, `package.json` with ESLint dependency
+- **Configures**: ESLint report paths for JavaScript/TypeScript analysis
+- **Works with**: React, Vue, Angular, and Node.js projects
+
+#### Hadolint Docker Linting (`enable-hadolint: true`)
+- **Auto-detects**: `Dockerfile`, `Dockerfile.*`, `.hadolint.yaml` configuration
+- **Configures**: Docker linting integration for container analysis
+- **Works with**: Multi-stage builds, custom Dockerfile naming patterns
+
+> **💡 Smart Defaults**: Analysis tools are **enabled by default** but only activate when their respective files/configurations are detected in your project.
 
 ### Language Detection
 
@@ -165,10 +186,9 @@ steps:
     sonar-project-key: 'java-maven-project'
     sonar-sources: 'src/main'
     sonar-tests: 'src/test'
-    enable-jacoco: 'true'
+    # JaCoCo auto-detection enabled by default
     extra-args: |
       -Dsonar.java.binaries=target/classes
-      -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 ```
 
 #### Node.js Project with TypeScript
@@ -193,10 +213,9 @@ steps:
     sonar-sources: 'src'
     sonar-tests: 'src/__tests__'
     sonar-exclusions: '**/*.test.js,**/node_modules/**'
-    enable-eslint: 'true'
+    # ESLint auto-detection enabled by default
     extra-args: |
       -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info
-      -Dsonar.eslint.reportPaths=eslint-report.xml
 ```
 
 #### Docker Project with Hadolint
@@ -213,7 +232,7 @@ steps:
     sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
     sonar-token: ${{ secrets.SONAR_TOKEN }}
     sonar-project-key: 'docker-project'
-    enable-hadolint: 'true'
+    # Hadolint auto-detection enabled by default
     extra-args: |
       -Dsonar.docker.hadolint.reportPaths=hadolint-report.json
 ```

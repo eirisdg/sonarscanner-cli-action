@@ -2,6 +2,29 @@
 
 This document provides advanced usage examples for the SonarScanner CLI Action.
 
+## Smart Analysis Features
+
+The action includes intelligent auto-detection capabilities that are enabled by default. These features automatically detect and configure analysis tools when their artifacts are present.
+
+### Default Behavior
+- **JaCoCo integration**: Auto-enabled when `jacoco.xml` reports are detected
+- **ESLint integration**: Auto-enabled when `.eslintrc*` configuration files are detected  
+- **Hadolint integration**: Auto-enabled when `Dockerfile` or `.hadolint.*` configuration is detected
+
+### Customizing Smart Features
+```yaml
+- name: Customize Smart Features
+  uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-project-key: 'my-project'
+    # Disable specific auto-detection features
+    enable-jacoco: 'false'    # Disable JaCoCo even if reports exist
+    enable-eslint: 'true'     # Keep ESLint auto-detection (default)
+    enable-hadolint: 'false'  # Disable Hadolint even if Dockerfile exists
+```
+
 ## Direct Analysis Configuration
 
 ### Basic SonarQube Analysis

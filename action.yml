@@ -80,17 +80,17 @@ inputs:
     required: false
     default: 'INFO'
   enable-jacoco:
-    description: 'Enable JaCoCo coverage analysis'
+    description: 'Enable JaCoCo coverage analysis (auto-detects reports when enabled)'
     required: false
-    default: 'false'
+    default: 'true'
   enable-eslint:
-    description: 'Enable ESLint analysis integration'
+    description: 'Enable ESLint analysis integration (auto-detects configuration when enabled)'
     required: false
-    default: 'false'
+    default: 'true'
   enable-hadolint:
-    description: 'Enable Hadolint Docker linting'
+    description: 'Enable Hadolint Docker linting (auto-detects Dockerfile when enabled)'
     required: false
-    default: 'false'
+    default: 'true'
   
   # Custom Arguments
   extra-args:

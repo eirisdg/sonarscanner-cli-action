@@ -17,7 +17,8 @@ jobs:
         sonar-version: ['7.2.0.5079', '6.2.0.4584']
         enable-features: [
           { jacoco: 'false', eslint: 'false', hadolint: 'false' },
-          { jacoco: 'true', eslint: 'true', hadolint: 'true' }
+          { jacoco: 'true', eslint: 'true', hadolint: 'true' },
+          { jacoco: 'default', eslint: 'default', hadolint: 'default' }
         ]
     
     runs-on: ${{ matrix.os }}
@@ -50,6 +51,40 @@ jobs:
         }
         EOF
 
+    - name: Create test artifacts for auto-detection
+      if: matrix.enable-features.jacoco == 'default'
+      shell: bash
+      run: |
+        # Create JaCoCo XML report for auto-detection test
+        mkdir -p target/site/jacoco
+        cat > target/site/jacoco/jacoco.xml << 'EOF'
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <report name="coverage">
+          <counter type="INSTRUCTION" missed="0" covered="10"/>
+          <counter type="BRANCH" missed="0" covered="5"/>
+        </report>
+        EOF
+        
+        # Create ESLint configuration for auto-detection test
+        cat > .eslintrc.json << 'EOF'
+        {
+          "env": {
+            "node": true,
+            "es2021": true
+          },
+          "extends": ["eslint:recommended"]
+        }
+        EOF
+        
+        # Create Dockerfile for auto-detection test
+        cat > Dockerfile << 'EOF'
+        FROM node:18-alpine
+        WORKDIR /app
+        COPY . .
+        RUN npm install
+        CMD ["npm", "start"]
+        EOF
+
     - name: Test SonarScanner CLI Action (dry run mode)
       id: analysis
       continue-on-error: true  # Expected to fail without valid server
@@ -61,9 +96,9 @@ jobs:
         sonar-project-name: 'Test Project'
         sonar-sources: 'src'
         sonar-scanner-version: ${{ matrix.sonar-version }}
-        enable-jacoco: ${{ matrix.enable-features.jacoco }}
-        enable-eslint: ${{ matrix.enable-features.eslint }}
-        enable-hadolint: ${{ matrix.enable-features.hadolint }}
+        enable-jacoco: ${{ matrix.enable-features.jacoco == 'default' && '' || matrix.enable-features.jacoco }}
+        enable-eslint: ${{ matrix.enable-features.eslint == 'default' && '' || matrix.enable-features.eslint }}
+        enable-hadolint: ${{ matrix.enable-features.hadolint == 'default' && '' || matrix.enable-features.hadolint }}
         sonar-verbose: 'true'
         extra-args: '-Dsonar.scanner.dumpToFile=/tmp/analysis-dump.txt'
 

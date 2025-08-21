@@ -128,6 +128,82 @@ install_sonar_scanner() {
     print_success "SonarScanner CLI $installed_version installed successfully"
 }
 
+# Auto-detect JaCoCo coverage reports
+detect_jacoco() {
+    local jacoco_paths=""
+    
+    # Common JaCoCo report locations
+    local possible_paths=(
+        "target/site/jacoco/jacoco.xml"
+        "build/reports/jacoco/test/jacocoTestReport.xml"
+        "jacoco.xml"
+        "coverage/jacoco.xml"
+        "target/jacoco.exec"
+        "build/jacoco/test.exec"
+    )
+    
+    for path in "${possible_paths[@]}"; do
+        if [ -f "$path" ]; then
+            if [[ "$path" == *.xml ]]; then
+                jacoco_paths="${jacoco_paths}${jacoco_paths:+,}$path"
+            fi
+        fi
+    done
+    
+    echo "$jacoco_paths"
+}
+
+# Auto-detect ESLint configuration
+detect_eslint() {
+    local eslint_config_found=false
+    
+    # Check for ESLint configuration files
+    local config_files=(
+        ".eslintrc"
+        ".eslintrc.js"
+        ".eslintrc.json"
+        ".eslintrc.yml"
+        ".eslintrc.yaml"
+        "eslint.config.js"
+    )
+    
+    for config in "${config_files[@]}"; do
+        if [ -f "$config" ]; then
+            eslint_config_found=true
+            break
+        fi
+    done
+    
+    # Check package.json for eslint dependency
+    if [ -f "package.json" ] && grep -q '"eslint"' package.json; then
+        eslint_config_found=true
+    fi
+    
+    echo "$eslint_config_found"
+}
+
+# Auto-detect Hadolint/Docker files
+detect_hadolint() {
+    local hadolint_config_found=false
+    
+    # Check for Dockerfile or Hadolint configuration
+    local docker_files=(
+        "Dockerfile"
+        "Dockerfile.*"
+        ".hadolint.yaml"
+        ".hadolint.yml"
+    )
+    
+    for pattern in "${docker_files[@]}"; do
+        if ls $pattern 1> /dev/null 2>&1; then
+            hadolint_config_found=true
+            break
+        fi
+    done
+    
+    echo "$hadolint_config_found"
+}
+
 # Build sonar-scanner command
 build_sonar_command() {
     local cmd="$SONAR_SCANNER_HOME/bin/sonar-scanner"
@@ -171,17 +247,35 @@ build_sonar_command() {
         cmd="$cmd -X"
     fi
     
-    # Analysis integrations
-    if [ "${ENABLE_JACOCO:-false}" = "true" ]; then
-        print_info "JaCoCo integration enabled"
+    # Smart analysis integrations with auto-detection
+    if [ "${ENABLE_JACOCO:-true}" = "true" ]; then
+        jacoco_reports=$(detect_jacoco)
+        if [ -n "$jacoco_reports" ]; then
+            print_success "JaCoCo integration enabled - detected reports: $jacoco_reports"
+            cmd="$cmd -Dsonar.coverage.jacoco.xmlReportPaths=$jacoco_reports"
+        else
+            print_info "JaCoCo integration enabled but no reports detected"
+        fi
     fi
     
-    if [ "${ENABLE_ESLINT:-false}" = "true" ]; then
-        print_info "ESLint integration enabled"
+    if [ "${ENABLE_ESLINT:-true}" = "true" ]; then
+        eslint_detected=$(detect_eslint)
+        if [ "$eslint_detected" = "true" ]; then
+            print_success "ESLint integration enabled - configuration detected"
+            cmd="$cmd -Dsonar.javascript.eslint.reportPaths=eslint-report.json"
+        else
+            print_info "ESLint integration enabled but no configuration detected"
+        fi
     fi
     
-    if [ "${ENABLE_HADOLINT:-false}" = "true" ]; then
-        print_info "Hadolint integration enabled"
+    if [ "${ENABLE_HADOLINT:-true}" = "true" ]; then
+        hadolint_detected=$(detect_hadolint)
+        if [ "$hadolint_detected" = "true" ]; then
+            print_success "Hadolint integration enabled - Docker files detected"
+            cmd="$cmd -Dsonar.docker.dockerfile.reportPaths=hadolint-report.json"
+        else
+            print_info "Hadolint integration enabled but no Docker files detected"
+        fi
     fi
     
     # Add extra arguments

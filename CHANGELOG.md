@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Smart Auto-Detection**: Intelligent detection and configuration of analysis tools
+  - JaCoCo coverage analysis auto-enabled when reports are detected
+  - ESLint integration auto-enabled when configuration files are detected  
+  - Hadolint Docker linting auto-enabled when Dockerfile is detected
 - Comprehensive CI/CD workflows for marketplace readiness
 - Security scanning with CodeQL and Trivy
 - Dependabot configuration for automated dependency updates
@@ -18,9 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release automation workflow for marketplace publishing
 
 ### Changed
+- **Default Behavior**: Analysis integrations now default to `true` with smart auto-detection
+  - `enable-jacoco` default changed from `false` to `true`
+  - `enable-eslint` default changed from `false` to `true` 
+  - `enable-hadolint` default changed from `false` to `true`
 - Enhanced action.yml metadata for better marketplace presentation
 - Improved README with professional badges and structure
 - Updated test workflow with comprehensive cross-platform testing
+- Updated documentation to reflect smart detection capabilities
 
 ### Security
 - Added security scanning workflows
