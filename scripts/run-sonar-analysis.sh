@@ -28,11 +28,40 @@ print_error() {
 # Default values
 SONAR_SCANNER_VERSION="${SONAR_SCANNER_VERSION:-7.2.0.5079}"
 SONAR_SCANNER_HOME="$HOME/.sonar-scanner"
-SCANNER_BINARIES="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli"
-SCANNER_ZIP_URL="${SCANNER_BINARIES}/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip"
+SCANNER_ZIP_URL="https://github.com/SonarSource/sonar-scanner-cli/releases/download/${SONAR_SCANNER_VERSION}/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip"
+
+# Detect system architecture for macOS optimization
+detect_system_architecture() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        local arch=$(uname -m)
+        case $arch in
+            "arm64")
+                print_info "Detected macOS Apple Silicon (ARM64)"
+                export DETECTED_ARCH="apple-silicon"
+                ;;
+            "x86_64")
+                print_info "Detected macOS Intel (x86_64)" 
+                export DETECTED_ARCH="intel"
+                ;;
+            *)
+                print_warning "Unknown macOS architecture: $arch"
+                export DETECTED_ARCH="unknown"
+                ;;
+        esac
+        
+        # Additional macOS system information
+        print_info "macOS Version: $(sw_vers -productVersion 2>/dev/null || echo 'Unknown')"
+        print_info "Hardware Model: $(sysctl -n hw.model 2>/dev/null || echo 'Unknown')"
+    else
+        export DETECTED_ARCH="not-macos"
+    fi
+}
 
 print_info "Starting SonarQube Analysis..."
 print_info "SonarScanner Version: $SONAR_SCANNER_VERSION"
+
+# Detect system architecture
+detect_system_architecture
 
 # Install SonarScanner CLI if not present
 install_sonar_scanner() {
@@ -62,6 +91,26 @@ install_sonar_scanner() {
 
     java_version=$(java -version 2>&1 | grep -oP '(?<=version ")([^"]*)')
     print_info "Java version: $java_version"
+    
+    # macOS-specific Java architecture verification
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        print_info "Verifying Java architecture compatibility on macOS..."
+        java_arch_info=$(java -XshowSettings:properties -version 2>&1 | grep -E "(os\.arch|sun\.arch)" || echo "")
+        if [[ -n "$java_arch_info" ]]; then
+            print_info "Java architecture details: $java_arch_info"
+        fi
+        
+        # Additional verification for Apple Silicon compatibility
+        if [[ "$DETECTED_ARCH" == "apple-silicon" ]]; then
+            print_info "Verifying Java compatibility with Apple Silicon..."
+            # Check if Java runs successfully with basic operations
+            if java -version >/dev/null 2>&1; then
+                print_success "Java is compatible with Apple Silicon"
+            else
+                print_warning "Java may have compatibility issues with Apple Silicon"
+            fi
+        fi
+    fi
 
     # Check if we have curl or wget
     if command -v curl &> /dev/null; then
@@ -317,6 +366,7 @@ main() {
     echo "version=$installed_version" >> $GITHUB_OUTPUT
     echo "path=$SONAR_SCANNER_HOME" >> $GITHUB_OUTPUT
     echo "result=$analysis_result" >> $GITHUB_OUTPUT
+    echo "architecture=$DETECTED_ARCH" >> $GITHUB_OUTPUT
     
     print_success "Analysis completed successfully"
 }

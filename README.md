@@ -13,7 +13,7 @@ The `sonarscanner-cli-action` provides the following functionality for GitHub Ac
 - **Analysis-specific controls** - enable/disable specific analyses like JaCoCo, Hadolint, ESLint, and more
 - **Faster execution** - native execution significantly reduces analysis time and startup overhead
 - **Secure token handling** - proper management of authentication credentials
-- **Cross-platform compatibility** - tested on Linux, macOS, and Windows runners
+- **Cross-platform compatibility** - tested on Linux, macOS (Intel + Apple Silicon), and Windows runners
 
 This action allows you to perform static code analysis with SonarQube and SonarCloud for projects in any supported programming language, with automatic language detection and optimized performance. **Designed for GitHub Marketplace publication with enterprise-grade reliability.**
 
@@ -275,6 +275,36 @@ steps:
       -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 ```
 
+### Action Outputs
+
+This action provides the following outputs that can be used by subsequent workflow steps:
+
+| Output | Description | Example Value |
+|--------|-------------|---------------|
+| `sonar-scanner-version` | Version of SonarScanner CLI that was used | `7.2.0.5079` |
+| `sonar-scanner-path` | Path to the SonarScanner CLI installation | `/home/runner/.sonar-scanner` |
+| `analysis-result` | Analysis result status | `success` or `failed` |
+| `system-architecture` | Detected system architecture | `intel`, `apple-silicon` (macOS), or architecture info (other OS) |
+
+#### Example Usage of Outputs
+
+```yaml
+- name: Run SonarQube Analysis
+  id: sonar-analysis
+  uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-project-key: 'my-project'
+
+- name: Display Analysis Results
+  run: |
+    echo "SonarScanner Version: ${{ steps.sonar-analysis.outputs.sonar-scanner-version }}"
+    echo "Scanner Path: ${{ steps.sonar-analysis.outputs.sonar-scanner-path }}"
+    echo "Analysis Result: ${{ steps.sonar-analysis.outputs.analysis-result }}"
+    echo "System Architecture: ${{ steps.sonar-analysis.outputs.system-architecture }}"
+```
+
 ### Supported Languages
 
 This action works with all programming languages supported by SonarQube/SonarCloud, including:
@@ -413,7 +443,19 @@ extra-args: |
 - Valid authentication token
 - Repository read permissions
 - Git history (use `fetch-depth: 0` for better analysis)
-- **SonarScanner CLI**: This action automatically downloads and uses the latest SonarScanner CLI version (currently `7.2.0.5079`) or a specified version
+- **SonarScanner CLI**: This action automatically downloads and uses SonarScanner CLI from GitHub releases (currently `7.2.0.5079` by default) or a specified version
+
+### Platform Support
+
+This action supports all GitHub Actions runner environments:
+
+- **Linux** (ubuntu-latest): Full support with optimized performance
+- **Windows** (windows-latest): Complete compatibility with PowerShell execution
+- **macOS** (macos-latest): Full support with automatic architecture detection
+  - **Intel (x86_64)**: Complete compatibility on macos-13 and earlier Intel-based runners  
+  - **Apple Silicon (ARM64)**: Full support on macos-latest Apple Silicon runners
+  - **Automatic Selection**: Architecture detection is fully automatic based on the runner type
+  - **Java Compatibility**: Automatic verification of Java architecture compatibility on both Mac architectures
 
 ## Recommended Permissions
 

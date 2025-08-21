@@ -1,0 +1,45 @@
+# CodeQL Configuration for SonarScanner CLI Action
+# Optimized for GitHub Marketplace security compliance
+
+name: "SonarScanner CLI Action Security Analysis"
+
+disable-default-path-filters: false
+
+# Define query suites to run
+queries:
+  - name: "Security and Quality"
+    uses: security-and-quality
+  - name: "Security Extended"
+    uses: security-extended
+
+# Paths to analyze
+paths:
+  - "scripts/"
+  - "action.yml"
+  - ".github/"
+
+# Paths to ignore
+paths-ignore:
+  - "docs/"
+  - "examples/"
+  - "**/*.md"
+  - "**/*.txt"
+  - "**/LICENSE"
+  - "**/.gitignore"
+
+# Language-specific configuration
+javascript:
+  # Include JavaScript/Node.js files
+  path-filters:
+    - include: "**/*.js"
+    - include: "**/*.json"
+    - include: "**/*.yml"
+    - include: "**/*.yaml"
+  
+  # Exclude test and example files from security analysis
+  exclude:
+    - "**/node_modules/**"
+    - "**/test/**"
+    - "**/tests/**"
+    - "**/*.test.js"
+    - "**/*.spec.js"

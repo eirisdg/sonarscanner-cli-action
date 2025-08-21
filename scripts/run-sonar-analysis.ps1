@@ -33,11 +33,20 @@ if (-not $Version) {
 }
 
 $SonarScannerHome = "$env:USERPROFILE\.sonar-scanner"
-$ScannerBinaries = "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli"
-$ScannerZipUrl = "$ScannerBinaries/sonar-scanner-cli-$Version.zip"
+$ScannerZipUrl = "https://github.com/SonarSource/sonar-scanner-cli/releases/download/$Version/sonar-scanner-cli-$Version.zip"
+
+# Detect system architecture (primarily for documentation/logging)
+function Detect-SystemArchitecture {
+    $arch = $env:PROCESSOR_ARCHITECTURE
+    Write-Info "Windows Architecture: $arch"
+    return $arch
+}
 
 Write-Info "Starting SonarQube Analysis..."
 Write-Info "SonarScanner Version: $Version"
+
+# Detect system architecture
+$DetectedArch = Detect-SystemArchitecture
 
 # Function to install SonarScanner CLI
 function Install-SonarScanner {
@@ -335,6 +344,7 @@ function Main {
     Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$InstalledVersion"
     Add-Content -Path $env:GITHUB_OUTPUT -Value "path=$SonarScannerHome"
     Add-Content -Path $env:GITHUB_OUTPUT -Value "result=$analysisResult"
+    Add-Content -Path $env:GITHUB_OUTPUT -Value "architecture=$DetectedArch"
     
     Write-Success "Analysis completed successfully"
 }
