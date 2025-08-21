@@ -21,6 +21,7 @@ This action allows you to perform static code analysis with SonarQube and SonarC
 - **🎯 Analysis Control**: Enable/disable specific analyses (JaCoCo, Hadolint, ESLint, etc.)
 - **🌐 Universal**: Works with any language supported by SonarQube/SonarCloud
 - **📦 Lightweight**: Direct execution on runner, faster workflow startup
+- **🔄 Auto-Updates**: Automatic monitoring of SonarScanner CLI releases with issue creation for updates
 
 ## Usage
 
@@ -472,6 +473,31 @@ Branch 'feature-branch' not found
 - Use `fetch-depth: 0` in checkout action
 - Configure branch analysis parameters correctly
 - Check branch permissions in SonarQube
+
+## 🔄 Automatic Version Monitoring
+
+This repository includes automatic monitoring of SonarScanner CLI releases to ensure the action always uses the latest version. The monitoring system:
+
+- **Daily Checks**: Automatically checks for new SonarScanner CLI releases every day at 8:00 AM UTC
+- **Smart Issue Creation**: Creates detailed issues when new versions are available, including:
+  - Complete release notes and changelog information
+  - Detailed checklist for testing and documentation updates
+  - Priority classification (major/minor/patch updates)
+  - Automatic labeling and assignment
+- **Duplicate Prevention**: Avoids creating multiple issues for the same version
+- **Manual Execution**: Can be triggered manually from GitHub Actions interface
+
+### Version Update Process
+
+When a new SonarScanner CLI version is detected, an issue is automatically created with a comprehensive checklist covering:
+
+1. **Code Updates**: Version bumps and compatibility checks
+2. **Testing**: Cross-platform testing, Java compatibility, caching verification
+3. **Documentation**: README, changelog, and example updates
+4. **Analysis**: Breaking changes review and feature evaluation
+5. **Validation**: Final testing and release preparation
+
+For more details, see the [Version Monitoring Documentation](docs/version-monitoring.md).
 
 ## Contributing
 

@@ -1,0 +1,219 @@
+name: Monitor SonarScanner CLI Versions
+
+on:
+  schedule:
+    # Run every day at 8:00 AM UTC
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      force_check:
+        description: 'Force version check even if up to date'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  check-version:
+    name: Check for New SonarScanner CLI Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Get current version from action.yml
+      id: current-version
+      run: |
+        current_version=$(awk '/sonar-scanner-version:/{getline; getline; getline; if($0 ~ /default:/) print $2}' action.yml | sed "s/'//g")
+        echo "version=$current_version" >> $GITHUB_OUTPUT
+        echo "Current SonarScanner CLI version: $current_version"
+    
+    - name: Get latest SonarScanner CLI release
+      id: latest-release
+      run: |
+        # Use GitHub CLI to get latest release info
+        release_info=$(gh api repos/SonarSource/sonar-scanner-cli/releases/latest)
+        
+        latest_release=$(echo "$release_info" | jq -r '.tag_name')
+        release_url=$(echo "$release_info" | jq -r '.html_url')
+        release_body=$(echo "$release_info" | jq -r '.body')
+        release_date=$(echo "$release_info" | jq -r '.published_at')
+        
+        echo "version=$latest_release" >> $GITHUB_OUTPUT
+        echo "release_url=$release_url" >> $GITHUB_OUTPUT
+        echo "release_date=$release_date" >> $GITHUB_OUTPUT
+        
+        echo "Latest SonarScanner CLI version: $latest_release"
+        
+        # Save release body to file for issue creation
+        echo "$release_body" > /tmp/release_notes.md
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Compare versions
+      id: version-check
+      run: |
+        current="${{ steps.current-version.outputs.version }}"
+        latest="${{ steps.latest-release.outputs.version }}"
+        force_check="${{ github.event.inputs.force_check }}"
+        
+        echo "Comparing versions: current=$current, latest=$latest"
+        
+        if [ "$current" = "$latest" ] && [ "$force_check" != "true" ]; then
+          echo "✅ Version is up to date: $current"
+          echo "needs_update=false" >> $GITHUB_OUTPUT
+        else
+          echo "🔔 New version available: $latest (current: $current)"
+          echo "needs_update=true" >> $GITHUB_OUTPUT
+          
+          # Determine if this is a major, minor, or patch update
+          current_major=$(echo "$current" | cut -d. -f1)
+          current_minor=$(echo "$current" | cut -d. -f2)
+          current_patch=$(echo "$current" | cut -d. -f3)
+          
+          latest_major=$(echo "$latest" | cut -d. -f1)
+          latest_minor=$(echo "$latest" | cut -d. -f2)
+          latest_patch=$(echo "$latest" | cut -d. -f3)
+          
+          if [ "$latest_major" != "$current_major" ]; then
+            echo "update_type=major" >> $GITHUB_OUTPUT
+            echo "priority=🔴 HIGH" >> $GITHUB_OUTPUT
+          elif [ "$latest_minor" != "$current_minor" ]; then
+            echo "update_type=minor" >> $GITHUB_OUTPUT
+            echo "priority=🟡 MEDIUM" >> $GITHUB_OUTPUT
+          else
+            echo "update_type=patch" >> $GITHUB_OUTPUT
+            echo "priority=🟢 LOW" >> $GITHUB_OUTPUT
+          fi
+        fi
+    
+    - name: Check if issue already exists
+      id: check-existing
+      if: steps.version-check.outputs.needs_update == 'true'
+      run: |
+        # Search for existing issues with the version number
+        issue_count=$(gh api graphql -f query='
+          query($owner: String!, $repo: String!) {
+            repository(owner: $owner, name: $repo) {
+              issues(first: 10, states: OPEN, filterBy: {labels: ["version-update"]}) {
+                nodes {
+                  title
+                  number
+                }
+              }
+            }
+          }' -f owner="${{ github.repository_owner }}" -f repo="${{ github.event.repository.name }}" \
+          --jq '.data.repository.issues.nodes | map(select(.title | contains("${{ steps.latest-release.outputs.version }}"))) | length')
+        
+        echo "Found $issue_count existing issues for this version"
+        
+        if [ "$issue_count" -eq 0 ]; then
+          echo "create_issue=true" >> $GITHUB_OUTPUT
+        else
+          echo "create_issue=false" >> $GITHUB_OUTPUT
+          echo "Issue already exists for version ${{ steps.latest-release.outputs.version }}"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create issue for version update
+      if: steps.version-check.outputs.needs_update == 'true' && steps.check-existing.outputs.create_issue == 'true'
+      run: |
+        # Prepare issue body
+        cat > /tmp/issue_body.md << EOF
+        ## 🔔 Nueva versión de SonarScanner CLI disponible
+        
+        **Versión actual**: \`${{ steps.current-version.outputs.version }}\`  
+        **Nueva versión**: \`${{ steps.latest-release.outputs.version }}\`  
+        **Tipo de actualización**: ${{ steps.version-check.outputs.update_type }}  
+        **Prioridad**: ${{ steps.version-check.outputs.priority }}  
+        **Fecha de release**: ${{ steps.latest-release.outputs.release_date }}  
+        **URL de release**: ${{ steps.latest-release.outputs.release_url }}
+        
+        ### 📋 Checklist de actualización
+        
+        #### Actualización de código
+        - [ ] Actualizar versión en \`action.yml\` (\`sonar-scanner-version\` default)
+        - [ ] Actualizar versión en ejemplos de documentación si es necesario
+        - [ ] Verificar compatibilidad con versiones anteriores
+        
+        #### Testing
+        - [ ] Ejecutar todos los tests existentes con la nueva versión
+        - [ ] Probar instalación en Linux, Windows y macOS
+        - [ ] Verificar que la nueva versión funciona con proyectos de ejemplo
+        - [ ] Probar con diferentes versiones de Java (17+)
+        - [ ] Verificar que el caching funciona correctamente
+        
+        #### Documentación
+        - [ ] Actualizar README.md con nueva versión por defecto
+        - [ ] Actualizar CHANGELOG.md con los cambios
+        - [ ] Actualizar documentación de ejemplos si hay cambios
+        - [ ] Verificar que los ejemplos de uso siguen funcionando
+        
+        #### Análisis de cambios importantes
+        - [ ] Revisar las release notes para cambios que rompan compatibilidad
+        - [ ] Identificar nuevas funcionalidades importantes
+        - [ ] Determinar si se necesitan cambios en el action
+        - [ ] Evaluar si se necesita actualizar la versión mayor/menor del action
+        
+        ### 📝 Release Notes de SonarScanner CLI ${{ steps.latest-release.outputs.version }}
+        
+        \`\`\`
+        $(cat /tmp/release_notes.md)
+        \`\`\`
+        
+        ### 🔍 Cambios importantes a considerar
+        
+        _Revisar manualmente las release notes arriba y marcar aquí los cambios importantes:_
+        
+        - [ ] Cambios en API o parámetros
+        - [ ] Cambios en requisitos de Java
+        - [ ] Nuevas funcionalidades que debería soportar el action
+        - [ ] Cambios en el comportamiento por defecto
+        - [ ] Cambios de seguridad importantes
+        
+        ### ✅ Validación final
+        
+        - [ ] Todos los tests pasan en CI/CD
+        - [ ] Documentación actualizada y revisada
+        - [ ] Se ha probado en al menos 2 proyectos diferentes
+        - [ ] Release notes del action actualizadas
+        
+        ---
+        
+        **Creado automáticamente por el workflow de monitoreo de versiones**  
+        **Fecha**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        EOF
+        
+        # Create the issue
+        gh issue create \
+          --title "📦 Actualizar SonarScanner CLI a ${{ steps.latest-release.outputs.version }}" \
+          --body-file /tmp/issue_body.md \
+          --label "version-update,enhancement,${{ steps.version-check.outputs.update_type }}-update" \
+          --assignee ${{ github.repository_owner }}
+        
+        echo "✅ Issue created for SonarScanner CLI version ${{ steps.latest-release.outputs.version }}"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Summary
+      run: |
+        echo "## 📊 Version Check Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Current version**: ${{ steps.current-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Latest version**: ${{ steps.latest-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.version-check.outputs.needs_update }}" = "true" ]; then
+          echo "- **Status**: 🔔 Update needed (${{ steps.version-check.outputs.update_type }} update)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Priority**: ${{ steps.version-check.outputs.priority }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check-existing.outputs.create_issue }}" = "true" ]; then
+            echo "- **Action**: ✅ Issue created" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Action**: ℹ️ Issue already exists" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- **Status**: ✅ Up to date" >> $GITHUB_STEP_SUMMARY
+        fi
