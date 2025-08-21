@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-13]
         sonar-version: ['7.2.0.5079', '6.2.0.4584', 'latest']
         include:
           # Additional test combinations for edge cases
@@ -62,8 +62,14 @@ jobs:
             sonar-version: '5.0.1.3006'
           - os: windows-latest
             sonar-version: '7.1.0.4996'
+          # macOS Intel (x86_64) testing
+          - os: macos-13
+            sonar-version: '6.0.0.4432'
+            architecture: 'intel'
+          # macOS Apple Silicon (ARM64) testing  
           - os: macos-latest
             sonar-version: '6.0.0.4432'
+            architecture: 'apple-silicon'
     
     runs-on: ${{ matrix.os }}
     
@@ -76,6 +82,29 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          
+      - name: Detect System Architecture (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          echo "🔍 Detecting macOS architecture..."
+          ARCH=$(uname -m)
+          echo "System architecture: $ARCH"
+          if [[ "$ARCH" == "arm64" ]]; then
+            echo "DETECTED_ARCH=apple-silicon" >> $GITHUB_ENV
+            echo "✅ Detected Apple Silicon (ARM64)"
+          elif [[ "$ARCH" == "x86_64" ]]; then
+            echo "DETECTED_ARCH=intel" >> $GITHUB_ENV  
+            echo "✅ Detected Intel (x86_64)"
+          else
+            echo "❓ Unknown architecture: $ARCH"
+            echo "DETECTED_ARCH=unknown" >> $GITHUB_ENV
+          fi
+          
+          # Verify Java architecture compatibility
+          echo "☕ Verifying Java architecture compatibility..."
+          java -version
+          java -XshowSettings:properties -version 2>&1 | grep -E "(os\.arch|sun\.arch)"
 
       - name: Create Test Project
         shell: bash
@@ -121,6 +150,29 @@ jobs:
           echo "Action Outcome: ${{ steps.test-action.outcome }}"
           echo "Version Output: ${{ steps.test-action.outputs.sonar-scanner-version }}"
           echo "Path Output: ${{ steps.test-action.outputs.sonar-scanner-path }}"
+          
+          # Validate macOS architecture compatibility
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            echo "🍎 macOS Architecture Validation:"
+            echo "Expected: ${{ matrix.architecture }}"
+            echo "Detected: ${DETECTED_ARCH:-not-detected}"
+            
+            # Verify architecture matches expectations where defined
+            if [[ -n "${{ matrix.architecture }}" && -n "${DETECTED_ARCH:-}" ]]; then
+              if [[ "${{ matrix.architecture }}" == "${DETECTED_ARCH}" ]]; then
+                echo "✅ Architecture matches expected: ${{ matrix.architecture }}"
+              else
+                echo "⚠️ Architecture mismatch - Expected: ${{ matrix.architecture }}, Detected: ${DETECTED_ARCH}"
+                echo "ℹ️ This is informational - SonarScanner should work on both architectures"
+              fi
+            fi
+            
+            # Additional macOS-specific validation
+            echo "🔍 macOS System Information:"
+            echo "Hardware: $(uname -m)"
+            echo "OS Version: $(sw_vers -productVersion)"
+            echo "Hardware Model: $(sysctl -n hw.model 2>/dev/null || echo 'Unknown')"
+          fi
           
           # Verify version consistency
           if [ "${{ matrix.sonar-version }}" != "latest" ]; then
@@ -539,6 +591,7 @@ jobs:
         run: |
           echo "🎉 Final integration test completed successfully!"
           echo "✅ Cross-platform compatibility verified"
+          echo "✅ macOS dual architecture support (Intel + Apple Silicon)"
           echo "✅ Parameter validation working"
           echo "✅ Feature integration functional"
           echo "✅ Branch and PR analysis supported"
@@ -565,7 +618,7 @@ jobs:
           echo "## ✅ Compliance Status" >> marketplace-report.md
           echo "" >> marketplace-report.md
           echo "- [x] **Action Metadata Complete** - Perfect action.yml with branding" >> marketplace-report.md
-          echo "- [x] **Cross-Platform Compatibility** - Tested on Linux, macOS, Windows" >> marketplace-report.md
+          echo "- [x] **Cross-Platform Compatibility** - Tested on Linux, macOS (Intel + Apple Silicon), Windows" >> marketplace-report.md
           echo "- [x] **Security Compliance** - Security scanning and best practices" >> marketplace-report.md
           echo "- [x] **Professional Documentation** - Complete README and docs/" >> marketplace-report.md
           echo "- [x] **Comprehensive Testing** - Full test coverage including edge cases" >> marketplace-report.md

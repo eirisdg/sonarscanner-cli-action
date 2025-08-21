@@ -107,6 +107,9 @@ outputs:
   analysis-result:
     description: 'Analysis result status'
     value: ${{ steps.analyze.outputs.result }}
+  system-architecture:
+    description: 'Detected system architecture (for macOS: intel or apple-silicon)'
+    value: ${{ steps.analyze.outputs.architecture }}
 
 runs:
   using: 'composite'
