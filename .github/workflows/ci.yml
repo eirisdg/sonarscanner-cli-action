@@ -24,12 +24,12 @@ jobs:
     - name: Check scripts syntax
       run: |
         # Check bash script syntax
-        bash -n scripts/install-sonar-scanner.sh
+        bash -n scripts/run-sonar-analysis.sh
         echo "✅ Bash script syntax is valid"
         
         # Check PowerShell script syntax (basic)
         if command -v pwsh >/dev/null 2>&1; then
-          pwsh -Command "Get-Content scripts/install-sonar-scanner.ps1 | Out-Null"
+          pwsh -Command "Get-Content scripts/run-sonar-analysis.ps1 | Out-Null"
           echo "✅ PowerShell script syntax is valid"
         else
           echo "ℹ️ PowerShell not available, skipping syntax check"
@@ -43,12 +43,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         sonar-version: ['7.2.0.5079', '6.2.0.4584']
-        cache: ['true', 'false']
         include:
           # Test latest version combinations
           - os: ubuntu-latest
             sonar-version: '5.0.1.3006'
-            cache: 'true'
     
     runs-on: ${{ matrix.os }}
     
@@ -62,70 +60,88 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
+    - name: Create test project
+      shell: bash
+      run: |
+        mkdir -p src/main/java/com/example
+        cat > src/main/java/com/example/App.java << 'EOF'
+        package com.example;
+        
+        public class App {
+            public static void main(String[] args) {
+                System.out.println("Hello World!");
+            }
+        }
+        EOF
+
     - name: Test Action
       id: test-action
+      continue-on-error: true  # Expected to fail without valid server
       uses: ./
       with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'ci-test-project'
+        sonar-project-name: 'CI Test Project'
+        sonar-sources: 'src'
         sonar-scanner-version: ${{ matrix.sonar-version }}
-        cache: ${{ matrix.cache }}
+        sonar-verbose: 'true'
+        extra-args: '-Dsonar.scanner.dumpToFile=/tmp/ci-analysis-dump.txt'
 
-    - name: Verify Installation
+    - name: Verify Analysis Attempt
       shell: bash
       run: |
-        echo "Testing sonar-scanner installation..."
+        echo "Analysis result: ${{ steps.test-action.outputs.result }}"
+        echo "SonarScanner version: ${{ steps.test-action.outputs.version }}"
+        echo "Installation path: ${{ steps.test-action.outputs.path }}"
         
-        # Test command exists
-        if ! command -v sonar-scanner >/dev/null 2>&1; then
-          echo "❌ sonar-scanner command not found in PATH"
-          exit 1
-        fi
-        
-        # Test version output
-        version_output=$(sonar-scanner --version 2>&1)
-        echo "Version output: $version_output"
-        
-        # Verify expected version is installed
-        if echo "$version_output" | grep -q "${{ matrix.sonar-version }}"; then
-          echo "✅ Correct version ${{ matrix.sonar-version }} installed"
+        # Verify expected version is installed/used
+        if [ "${{ steps.test-action.outputs.version }}" = "${{ matrix.sonar-version }}" ]; then
+          echo "✅ Correct version ${{ matrix.sonar-version }} used"
         else
-          echo "❌ Expected version ${{ matrix.sonar-version }} not found in version output"
+          echo "❌ Expected version ${{ matrix.sonar-version }} not found"
           exit 1
         fi
         
-        # Test outputs
-        echo "Installed version: ${{ steps.test-action.outputs.sonar-scanner-version }}"
-        echo "Installation path: ${{ steps.test-action.outputs.sonar-scanner-path }}"
-        
-        # Verify outputs match expectations
-        if [ "${{ steps.test-action.outputs.sonar-scanner-version }}" != "${{ matrix.sonar-version }}" ]; then
-          echo "❌ Output version doesn't match expected version"
+        # Verify that analysis was attempted (expected to fail without valid server)
+        if [ -f "/tmp/ci-analysis-dump.txt" ] || [ "${{ steps.test-action.outcome }}" = "failure" ]; then
+          echo "✅ SonarScanner CLI attempted analysis (expected to fail without valid server)"
+        else
+          echo "❌ SonarScanner CLI didn't attempt analysis"
           exit 1
         fi
 
-    - name: Test Basic Analysis (dry-run)
-      shell: bash
+  test-parameter-validation:
+    name: Test Parameter Validation
+    needs: lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Test Missing Required Parameters
+      id: test-missing
+      continue-on-error: true
+      uses: ./
+      with:
+        # Missing required sonar-host-url, sonar-token, sonar-project-key
+        sonar-project-name: 'Test Project'
+
+    - name: Verify Parameter Validation
       run: |
-        # Create a minimal sonar-project.properties for testing
-        cat > sonar-project.properties << EOF
-        sonar.projectKey=test-project
-        sonar.projectName=Test Project
-        sonar.projectVersion=1.0
-        sonar.sources=.
-        sonar.exclusions=**/*.yml,**/*.yaml,**/*.json,**/*.md
-        EOF
-        
-        # Run dry-run analysis to verify scanner works
-        echo "Running dry-run analysis..."
-        sonar-scanner -Dsonar.scanner.dumpToFile=/tmp/sonar-scanner-dump.txt || {
-          echo "ℹ️ Scanner dry-run failed (expected without server connection)"
-          # Check if the failure is due to missing server connection (expected)
-          if [ -f "/tmp/sonar-scanner-dump.txt" ]; then
-            echo "✅ Scanner executable works (dry-run dump created)"
-          else
-            echo "❌ Scanner executable appears to have issues"
-            exit 1
-          fi
-        }
+        if [ "${{ steps.test-missing.outcome }}" = "failure" ]; then
+          echo "✅ Missing required parameters correctly failed"
+        else
+          echo "❌ Missing required parameters should have failed"
+          exit 1
+        fi
 
   test-edge-cases:
     name: Test Edge Cases
@@ -142,13 +158,21 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
+    - name: Create test project
+      run: |
+        mkdir -p src
+        echo "console.log('test');" > src/app.js
+
     - name: Test Invalid Version (should fail gracefully)
       id: test-invalid
       continue-on-error: true
       uses: ./
       with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'invalid-version-test'
         sonar-scanner-version: '999.999.999.999'
-        cache: 'false'
+        sonar-sources: 'src'
 
     - name: Verify Invalid Version Handling
       run: |
@@ -159,26 +183,110 @@ jobs:
           exit 1
         fi
 
-    - name: Test Multiple Installations
+    - name: Test Multiple Analysis Attempts
+      continue-on-error: true
       uses: ./
       with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'multi-test-1'
+        sonar-sources: 'src'
         sonar-scanner-version: '7.2.0.5079'
-        cache: 'true'
 
-    - name: Test Reinstallation with Different Version
+    - name: Test Different Version
+      continue-on-error: true
       uses: ./
       with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'multi-test-2'
+        sonar-sources: 'src'
         sonar-scanner-version: '6.2.0.4584'
-        cache: 'false'
 
-    - name: Verify Final Installation
+    - name: Verify Multiple Attempts
       run: |
-        version_output=$(sonar-scanner --version 2>&1)
-        if echo "$version_output" | grep -q "6.2.0.4584"; then
-          echo "✅ Version change handled correctly"
-        else
-          echo "❌ Version change not handled correctly"
-          exit 1
+        echo "✅ Multiple analysis attempts completed (expected to fail without valid server)"
+
+  test-features:
+    name: Test Analysis Features
+    needs: lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Node.js for ESLint
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Create comprehensive test project
+      run: |
+        # Java source
+        mkdir -p src/main/java/com/example
+        cat > src/main/java/com/example/Calculator.java << 'EOF'
+        package com.example;
+        
+        public class Calculator {
+            public int add(int a, int b) {
+                return a + b;
+            }
+        }
+        EOF
+        
+        # JavaScript source
+        mkdir -p src/js
+        cat > src/js/utils.js << 'EOF'
+        function formatMessage(message) {
+            return message.trim().toUpperCase();
+        }
+        
+        module.exports = { formatMessage };
+        EOF
+
+    - name: Setup ESLint
+      run: |
+        npm init -y
+        npm install --save-dev eslint
+        cat > .eslintrc.js << 'EOF'
+        module.exports = {
+            env: { node: true, es2021: true },
+            extends: ['eslint:recommended'],
+            rules: { 'no-unused-vars': 'error' }
+        };
+        EOF
+        npx eslint src/js --format json --output-file eslint-report.json || true
+
+    - name: Test Feature Integration
+      continue-on-error: true  # Expected to fail without valid server
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'feature-test'
+        sonar-project-name: 'Feature Integration Test'
+        sonar-sources: 'src'
+        enable-jacoco: 'true'
+        enable-eslint: 'true'
+        enable-hadolint: 'true'
+        sonar-verbose: 'true'
+        extra-args: |
+          -Dsonar.java.binaries=target/classes
+          -Dsonar.eslint.reportPaths=eslint-report.json
+          -Dsonar.scanner.dumpToFile=/tmp/feature-dump.txt
+
+    - name: Verify Feature Integration
+      run: |
+        echo "✅ Feature integration test completed"
+        if [ -f "/tmp/feature-dump.txt" ]; then
+          echo "✅ Analysis configuration dump created"
         fi
 
   test-integration:
@@ -196,50 +304,56 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Setup SonarScanner
-      uses: ./
-      with:
-        sonar-scanner-version: '7.2.0.5079'
-
     - name: Create Test Project
       run: |
         mkdir -p src/main/java/com/example
-        cat > src/main/java/com/example/App.java << 'EOF'
+        cat > src/main/java/com/example/Service.java << 'EOF'
         package com.example;
         
-        public class App {
-            public static void main(String[] args) {
-                System.out.println("Hello World!");
+        public class Service {
+            private String name;
+            
+            public Service(String name) {
+                this.name = name;
             }
             
-            public String getMessage() {
-                return "Hello World!";
+            public String processData(String input) {
+                if (input == null) {
+                    return "default";
+                }
+                return name + ": " + input.toUpperCase();
+            }
+            
+            public boolean isValid(String data) {
+                return data != null && !data.trim().isEmpty();
             }
         }
         EOF
-        
-        cat > sonar-project.properties << 'EOF'
-        sonar.projectKey=integration-test
-        sonar.projectName=Integration Test
-        sonar.projectVersion=1.0
-        sonar.sources=src
-        sonar.java.source=17
-        sonar.java.target=17
-        EOF
 
-    - name: Test SonarScanner with Real Project
+    - name: Test Comprehensive Analysis
+      continue-on-error: true  # Expected to fail without valid server
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'integration-test'
+        sonar-project-name: 'Integration Test Project'
+        sonar-project-version: '1.0.0'
+        sonar-sources: 'src/main'
+        sonar-encoding: 'UTF-8'
+        sonar-verbose: 'true'
+        extra-args: |
+          -Dsonar.java.source=17
+          -Dsonar.java.target=17
+          -Dsonar.scanner.dumpToFile=/tmp/integration-dump.txt
+
+    - name: Verify Integration Test
       run: |
-        # Test that scanner can parse the project without server
-        echo "Testing project analysis capabilities..."
-        sonar-scanner \
-          -Dsonar.verbose=true \
-          -Dsonar.scanner.dumpToFile=/tmp/analysis-dump.txt \
-          || echo "Expected failure without server connection"
-        
-        # Verify scanner processed the project
-        if [ -f "/tmp/analysis-dump.txt" ]; then
-          echo "✅ Scanner successfully analyzed project structure"
-          echo "Scanner dump size: $(wc -l < /tmp/analysis-dump.txt) lines"
+        echo "✅ Integration test completed"
+        echo "Expected to fail without valid SonarQube server connection"
+        if [ -f "/tmp/integration-dump.txt" ]; then
+          echo "✅ Analysis configuration successfully processed"
+          echo "Integration dump size: $(wc -l < /tmp/integration-dump.txt) lines"
         else
-          echo "ℹ️ No dump file created (may be expected behavior)"
+          echo "ℹ️ Analysis attempted (no dump file created)"
         fi

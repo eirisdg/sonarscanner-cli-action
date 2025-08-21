@@ -2,40 +2,32 @@
 
 This document provides advanced usage examples for the SonarScanner CLI Action.
 
-## Custom Analysis Configuration
+## Direct Analysis Configuration
 
 ### Basic SonarQube Analysis
 ```yaml
-- name: Setup SonarScanner CLI
-  uses: eirisdg/sonarscanner-cli-action@v1
-
 - name: Run SonarQube Analysis
-  env:
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-  run: |
-    sonar-scanner \
-      -Dsonar.projectKey=my-project \
-      -Dsonar.projectName="My Project" \
-      -Dsonar.projectVersion=1.0 \
-      -Dsonar.sources=src \
-      -Dsonar.exclusions="**/*.test.js,**/node_modules/**" \
-      -Dsonar.host.url=$SONAR_HOST_URL \
-      -Dsonar.login=$SONAR_TOKEN
+  uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-project-key: 'my-project'
+    sonar-project-name: 'My Project'
+    sonar-project-version: '1.0'
+    sonar-sources: 'src'
+    sonar-exclusions: '**/*.test.js,**/node_modules/**'
 ```
 
 ### SonarCloud Analysis
 ```yaml
 - name: Run SonarCloud Analysis
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  run: |
-    sonar-scanner \
-      -Dsonar.projectKey=my-org_my-project \
-      -Dsonar.organization=my-org \
-      -Dsonar.host.url=https://sonarcloud.io \
-      -Dsonar.login=$SONAR_TOKEN
+  uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-host-url: 'https://sonarcloud.io'
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-organization: 'my-org'
+    sonar-project-key: 'my-org_my-project'
+    sonar-sources: 'src'
 ```
 
 ### Matrix Strategy for Multiple Projects
@@ -48,84 +40,58 @@ strategy:
       - { key: "mobile", path: "mobile/", exclusions: "**/build/**,**/*Test.kt" }
 
 steps:
-- name: Setup SonarScanner CLI
-  uses: eirisdg/sonarscanner-cli-action@v1
-
 - name: Run Analysis for ${{ matrix.project.key }}
-  env:
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  run: |
-    cd ${{ matrix.project.path }}
-    sonar-scanner \
-      -Dsonar.projectKey=${{ matrix.project.key }} \
-      -Dsonar.sources=. \
-      -Dsonar.exclusions="${{ matrix.project.exclusions }}"
+  uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-project-key: ${{ matrix.project.key }}
+    sonar-sources: '.'
+    sonar-exclusions: ${{ matrix.project.exclusions }}
+    working-directory: ${{ matrix.project.path }}
 ```
 
 ### Pull Request Analysis
 ```yaml
-- name: Setup SonarScanner CLI
-  id: setup-sonar
-  uses: eirisdg/sonarscanner-cli-action@v1
-  with:
-    wait-for-quality-gate: 'false'  # Usually disabled for PRs
-
 - name: Run PR Analysis
   if: github.event_name == 'pull_request'
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  run: |
-    sonar-scanner \
-      -Dsonar.projectKey=my-project \
-      -Dsonar.pullrequest.key=${{ github.event.number }} \
-      -Dsonar.pullrequest.branch=${{ github.head_ref }} \
-      -Dsonar.pullrequest.base=${{ github.base_ref }} \
-      -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }}
-```
-
-### Quality Gate Enforcement
-```yaml
-- name: Setup SonarScanner CLI
-  id: setup-sonar
   uses: eirisdg/sonarscanner-cli-action@v1
   with:
-    wait-for-quality-gate: 'true'
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-project-key: 'my-project'
+    sonar-pull-request-key: ${{ github.event.number }}
+    sonar-pull-request-branch: ${{ github.head_ref }}
+    sonar-pull-request-base: ${{ github.base_ref }}
+    extra-args: |
+      -Dsonar.pullrequest.provider=github
+      -Dsonar.pullrequest.github.repository=${{ github.repository }}
+```
 
+### Branch Analysis
+```yaml
+- name: Run Branch Analysis
+  uses: eirisdg/sonarscanner-cli-action@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-project-key: 'my-project'
+    sonar-branch-name: ${{ github.ref_name }}
+    sonar-sources: 'src'
+```
+
+### Quality Gate Enforcement with Conditional Logic
+```yaml
 - name: Run Analysis with Quality Gate
-  env:
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  run: |
-    sonar-scanner \
-      -Dsonar.projectKey=my-project \
-      -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }} \
-      -Dsonar.qualitygate.timeout=300
-    
-    # The command will fail if quality gate fails
-    echo "Quality gate passed successfully!"
-```
-
-### Quality Gate with Conditional Logic
-```yaml
-- name: Setup SonarScanner CLI
-  id: setup-sonar
   uses: eirisdg/sonarscanner-cli-action@v1
   with:
-    wait-for-quality-gate: ${{ github.ref == 'refs/heads/main' }}
-
-- name: Run Analysis
-  env:
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  run: |
-    sonar-scanner \
-      -Dsonar.projectKey=my-project \
-      -Dsonar.qualitygate.wait=${{ steps.setup-sonar.outputs.quality-gate-wait }}
-    
-    if [ "${{ steps.setup-sonar.outputs.quality-gate-wait }}" = "true" ]; then
-      echo "Quality gate enforcement enabled for main branch"
-    else
-      echo "Quality gate enforcement disabled for feature branches"
-    fi
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    sonar-project-key: 'my-project'
+    sonar-sources: 'src'
+    extra-args: |
+      -Dsonar.qualitygate.wait=${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
+      -Dsonar.qualitygate.timeout=300
 ```
 
 ## Integration with Test Coverage
