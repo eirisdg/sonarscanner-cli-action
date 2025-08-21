@@ -58,13 +58,13 @@ echo "======================="
 workflow_count=$(find .github/workflows -name '*.yml' 2>/dev/null | wc -l)
 [ "$workflow_count" -gt 0 ] && echo -e "✅ ${GREEN}Has $workflow_count workflow files${NC}" || echo -e "⚠️  ${YELLOW}No workflow files found${NC}"
 
-[ -f .github/workflows/test.yml ] || [ -f .github/workflows/ci.yml ] && echo -e "✅ ${GREEN}Has test workflow${NC}" || echo -e "⚠️  ${YELLOW}Missing test workflow${NC}"
+[ -f .github/workflows/test.yml ] || [ -f .github/workflows/ci.yml ] || [ -f .github/workflows/marketplace-ci.yml ] && echo -e "✅ ${GREEN}Has test workflow${NC}" || echo -e "⚠️  ${YELLOW}Missing test workflow${NC}"
 
 echo
 echo "🔒 Security Requirements"
 echo "========================"
 
-[ -f .github/workflows/security.yml ] && echo -e "✅ ${GREEN}Has security workflow${NC}" || echo -e "⚠️  ${YELLOW}Missing security workflow${NC}"
+[ -f .github/workflows/security.yml ] || [ -f .github/workflows/marketplace-security.yml ] && echo -e "✅ ${GREEN}Has security workflow${NC}" || echo -e "⚠️  ${YELLOW}Missing security workflow${NC}"
 [ -f .github/dependabot.yml ] && echo -e "✅ ${GREEN}Has dependabot config${NC}" || echo -e "⚠️  ${YELLOW}Missing dependabot config${NC}"
 
 echo
