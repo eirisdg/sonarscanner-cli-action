@@ -1,50 +1,30 @@
 ---
-name: Bug Report
-about: Create a report to help us improve
+name: Bug report
+about: Create a report to help us improve the action
 title: '[BUG] '
-labels: ['bug', 'triage']
-assignees: ['eirisdg']
+labels: bug
+assignees: ''
 ---
 
-## Bug Description
-A clear and concise description of what the bug is.
+**Summary**
+A short summary of the bug.
 
-## Environment
-- **Operating System**: [e.g., ubuntu-latest, windows-latest, macos-latest]
-- **SonarScanner Version**: [e.g., 7.2.0.5079]
-- **Action Version**: [e.g., v1.0.0]
-- **Java Version**: [e.g., 17]
+**Reproduction steps**
+1. Checkout the repository and run the workflow or script used.
+2. Provide exact inputs and environment (OS/runner, scanner version).
+3. State the command or workflow step that failed.
 
-## Steps to Reproduce
-```yaml
-# Include your workflow configuration
-- name: Setup SonarScanner CLI
-  uses: eirisdg/sonarscanner-cli-action@v1
-  with:
-    sonar-scanner-version: 'X.X.X.X'
-    cache: 'true'
-```
+**Expected behavior**
+What did you expect to happen?
 
-1. Step 1
-2. Step 2
-3. Step 3
+**Actual behavior & logs**
+Paste relevant logs, error messages, and stack traces. Mask secrets if present.
 
-## Expected Behavior
-A clear and concise description of what you expected to happen.
+**Environment**
+- Runner (ubuntu-latest / macos-latest / windows-latest):
+- SonarScanner CLI version (if known):
+- Action version (tag or commit SHA):
+- Any other relevant env or config files (e.g. sonar-project.properties)
 
-## Actual Behavior
-A clear and concise description of what actually happened.
-
-## Logs
-```
-Paste relevant logs here
-```
-
-## Additional Context
-Add any other context about the problem here.
-
-## Checklist
-- [ ] I have searched existing issues to ensure this is not a duplicate
-- [ ] I have provided all required environment information
-- [ ] I have included relevant logs and error messages
-- [ ] I have tested with the latest version of the action
+**Additional context**
+Any other information that might help reproduce or triage the issue.
