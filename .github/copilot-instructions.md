@@ -2,23 +2,39 @@
 
 ## Copilot Instructions for this repository
 
+**CRITICAL PROJECT REQUIREMENT**
+This repository MUST be structured and maintained to strict GitHub Marketplace standards for GitHub Actions publication. All contributions must ensure the action meets marketplace guidelines and publication requirements. This is an imperative business need - the project cannot deviate from marketplace compliance standards.
+
 **Purpose**
-This file tells Copilot how to behave when contributing to the `sonarscanner-cli-action` repository. The action should make using the SonarScanner CLI faster and easier than running the scanner inside a container while allowing a rich set of configurable parameters.
+This file tells Copilot how to behave when contributing to the `sonarscanner-cli-action` repository. The action should make using the SonarScanner CLI faster and easier than running the scanner inside a container while allowing a rich set of configurable parameters, and MUST be ready for GitHub Marketplace publication.
 
 **High-level goals**
 - Provide a thin, reliable wrapper (scripts & YAML) that runs SonarScanner CLI locally.
 - Expose a large but well-documented set of CLI parameters for advanced use.
 - Keep documentation, examples, and tests in sync with code changes.
+- **MAINTAIN STRICT GITHUB MARKETPLACE COMPLIANCE** - All code, documentation, and structure must meet marketplace publication standards.
 
-**Core rules (always follow)**
+**GitHub Marketplace Requirements (NON-NEGOTIABLE)**
+- Perfect `action.yml` with complete metadata, proper branding, and validated inputs/outputs
+- Comprehensive README.md with clear usage examples, installation instructions, and parameter documentation
+- Proper repository structure with required files (LICENSE, CONTRIBUTING.md, etc.)
+- Full cross-platform compatibility (Linux, macOS, Windows) with comprehensive testing
+- Security best practices implementation and validation
+- Clean, professional codebase following all language-specific best practices
+- Complete documentation in `docs/` directory covering all use cases
+- Working examples in `examples/` directory that users can copy directly
+- Automated testing covering all supported scenarios and edge cases
+
+**Core rules (MARKETPLACE COMPLIANCE MANDATORY)**
 - Follow the idiomatic, language-specific best practices for the languages used in this repo (bash, PowerShell, YAML). Use shellcheck-style guidance for bash and PowerShell best practices for ps1 scripts.
 - Preserve and respect the repository folder layout: `docs/`, `examples/`, `scripts/`, tests, root `README.md`, `CHANGELOG.md`, and `action.yml`.
 - Update documentation (`README.md`, files under `docs/`, and examples) whenever behavior, parameters, or public outputs change.
 - Add unit tests for every new feature or behavior change. Prefer small, deterministic tests that run quickly.
 - Update `CHANGELOG.md` for each versioned change and include a concise rationale and migration notes when necessary.
 - Before changing defaults or adding/removing parameters, consult the official SonarScanner CLI documentation and release notes (see References below) and ensure compatibility.
+- **ENSURE ALL CHANGES MAINTAIN GITHUB MARKETPLACE PUBLICATION STANDARDS** - Every commit must preserve marketplace readiness.
 
-**Behavioral checklist for code changes**
+**Behavioral checklist for code changes (MARKETPLACE STANDARDS)**
 - Keep changes minimal and focused. Small, atomic commits are preferred.
 - When adding a new parameter or flag, add:
   - Implementation in the relevant script(s).
@@ -26,6 +42,7 @@ This file tells Copilot how to behave when contributing to the `sonarscanner-cli
   - Documentation in `docs/` and a short usage note in `README.md`.
   - Unit tests exercising parsing, validation, and the new behavior.
   - A `CHANGELOG.md` entry describing the change.
+- **VALIDATE MARKETPLACE COMPLIANCE** - Every feature must work across all supported platforms and meet GitHub Actions marketplace standards.
 
 **Contract (what to deliver for each change)**
 - Inputs: script arguments, environment variables, and `action.yml` inputs.

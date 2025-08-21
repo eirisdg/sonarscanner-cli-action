@@ -1,10 +1,12 @@
 ---
 name: Bug report
-about: Create a report to help us improve the action
+about: Create a report to help us improve the action (maintaining marketplace standards)
 title: '[BUG] '
 labels: bug
 assignees: ''
 ---
+
+**MARKETPLACE IMPACT:** Please indicate if this bug affects GitHub Marketplace compliance or cross-platform functionality.
 
 **Summary**
 A short summary of the bug.
@@ -24,6 +26,7 @@ Paste relevant logs, error messages, and stack traces. Mask secrets if present.
 - Runner (ubuntu-latest / macos-latest / windows-latest):
 - SonarScanner CLI version (if known):
 - Action version (tag or commit SHA):
+- **Marketplace compliance impact:** (Yes/No - affects publication standards)
 - Any other relevant env or config files (e.g. sonar-project.properties)
 
 **Additional context**

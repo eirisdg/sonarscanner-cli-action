@@ -1,10 +1,12 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
+about: Suggest an idea for this project (must maintain marketplace compliance)
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''
 ---
+
+**MARKETPLACE COMPLIANCE:** Does this feature support or maintain GitHub Marketplace publication standards? (Required consideration)
 
 **Problem statement**
 A short description of the problem or limitation this feature addresses.
@@ -25,3 +27,4 @@ Link to SonarScanner CLI docs or releases if this request is tied to upstream ca
 - [ ] I have searched existing issues for duplicates
 - [ ] I provided a clear use case and examples
 - [ ] This aligns with repository goals and cross-platform expectations
+- [ ] **Feature maintains marketplace compliance** (security, cross-platform, documentation standards)

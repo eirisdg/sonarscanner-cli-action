@@ -1,6 +1,9 @@
 # SonarScanner CLI Action
 
 [![Basic validation](https://github.com/eirisdg/sonarscanner-cli-action/actions/workflows/test.yml/badge.svg)](https://github.com/eirisdg/sonarscanner-cli-action/actions/workflows/test.yml)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Ready-green.svg)](https://github.com/marketplace/actions)
+
+**GitHub Marketplace Ready** - Professional-grade GitHub Action for SonarQube/SonarCloud analysis with enterprise-level reliability and cross-platform support.
 
 The `sonarscanner-cli-action` provides the following functionality for GitHub Actions runners:
 - **Native SonarScanner CLI execution** - runs directly on the runner for optimal performance and speed
@@ -10,8 +13,9 @@ The `sonarscanner-cli-action` provides the following functionality for GitHub Ac
 - **Analysis-specific controls** - enable/disable specific analyses like JaCoCo, Hadolint, ESLint, and more
 - **Faster execution** - native execution significantly reduces analysis time and startup overhead
 - **Secure token handling** - proper management of authentication credentials
+- **Cross-platform compatibility** - tested on Linux, macOS, and Windows runners
 
-This action allows you to perform static code analysis with SonarQube and SonarCloud for projects in any supported programming language, with automatic language detection and optimized performance.
+This action allows you to perform static code analysis with SonarQube and SonarCloud for projects in any supported programming language, with automatic language detection and optimized performance. **Designed for GitHub Marketplace publication with enterprise-grade reliability.**
 
 ## Key Advantages
 
@@ -21,6 +25,7 @@ This action allows you to perform static code analysis with SonarQube and SonarC
 - **🎯 Analysis Control**: Enable/disable specific analyses (JaCoCo, Hadolint, ESLint, etc.)
 - **🌐 Universal**: Works with any language supported by SonarQube/SonarCloud
 - **📦 Lightweight**: Direct execution on runner, faster workflow startup
+- **🛡️ Enterprise Ready**: Marketplace-compliant security and cross-platform reliability
 
 ## Usage
 
@@ -475,13 +480,17 @@ Branch 'feature-branch' not found
 
 ## Contributing
 
-Contributions are welcome! Please:
+Contributions are welcome! **All contributions must maintain GitHub Marketplace publication standards.** Please:
 
 1. Fork the project
 2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+3. **Ensure cross-platform compatibility** (test on Linux, macOS, Windows)
+4. **Follow security best practices** and coding standards
+5. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+6. Push to the branch (`git push origin feature/AmazingFeature`)
+7. Open a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed marketplace compliance requirements.
 
 ## License
 
