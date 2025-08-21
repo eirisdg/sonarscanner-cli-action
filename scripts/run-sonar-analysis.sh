@@ -28,8 +28,7 @@ print_error() {
 # Default values
 SONAR_SCANNER_VERSION="${SONAR_SCANNER_VERSION:-7.2.0.5079}"
 SONAR_SCANNER_HOME="$HOME/.sonar-scanner"
-SCANNER_BINARIES="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli"
-SCANNER_ZIP_URL="${SCANNER_BINARIES}/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip"
+SCANNER_ZIP_URL="https://github.com/SonarSource/sonar-scanner-cli/releases/download/${SONAR_SCANNER_VERSION}/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip"
 
 # Detect system architecture for macOS optimization
 detect_system_architecture() {

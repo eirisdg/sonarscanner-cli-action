@@ -33,8 +33,7 @@ if (-not $Version) {
 }
 
 $SonarScannerHome = "$env:USERPROFILE\.sonar-scanner"
-$ScannerBinaries = "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli"
-$ScannerZipUrl = "$ScannerBinaries/sonar-scanner-cli-$Version.zip"
+$ScannerZipUrl = "https://github.com/SonarSource/sonar-scanner-cli/releases/download/$Version/sonar-scanner-cli-$Version.zip"
 
 # Detect system architecture (primarily for documentation/logging)
 function Detect-SystemArchitecture {

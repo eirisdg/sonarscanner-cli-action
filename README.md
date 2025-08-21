@@ -443,7 +443,7 @@ extra-args: |
 - Valid authentication token
 - Repository read permissions
 - Git history (use `fetch-depth: 0` for better analysis)
-- **SonarScanner CLI**: This action automatically downloads and uses the latest SonarScanner CLI version (currently `7.2.0.5079`) or a specified version
+- **SonarScanner CLI**: This action automatically downloads and uses SonarScanner CLI from GitHub releases (currently `7.2.0.5079` by default) or a specified version
 
 ### Platform Support
 
@@ -452,8 +452,9 @@ This action supports all GitHub Actions runner environments:
 - **Linux** (ubuntu-latest): Full support with optimized performance
 - **Windows** (windows-latest): Complete compatibility with PowerShell execution
 - **macOS** (macos-latest): Full support with automatic architecture detection
-  - **Intel (x86_64)**: Complete compatibility on macos-13 and earlier Intel-based runners
+  - **Intel (x86_64)**: Complete compatibility on macos-13 and earlier Intel-based runners  
   - **Apple Silicon (ARM64)**: Full support on macos-latest Apple Silicon runners
+  - **Automatic Selection**: Architecture detection is fully automatic based on the runner type
   - **Java Compatibility**: Automatic verification of Java architecture compatibility on both Mac architectures
 
 ## Recommended Permissions
