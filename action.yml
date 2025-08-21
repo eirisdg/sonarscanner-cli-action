@@ -1,7 +1,7 @@
 name: 'SonarScanner CLI Action'
 description: >-
-  Cross-platform GitHub Action to install SonarScanner CLI for SonarQube/SonarCloud analysis.
-  Supports Windows, Linux, and macOS with automatic caching and version management.
+  Cross-platform GitHub Action for SonarQube/SonarCloud analysis with native SonarScanner CLI execution.
+  Supports automatic language detection, comprehensive parameter configuration, and analysis controls.
 author: 'Mario Adrián Domínguez González de Eiris'
 
 branding:
@@ -9,29 +9,104 @@ branding:
   color: 'purple'
 
 inputs:
+  # Core Parameters
+  sonar-host-url:
+    description: 'SonarQube server URL'
+    required: true
+  sonar-token:
+    description: 'Authentication token for SonarQube'
+    required: true
+  sonar-project-key:
+    description: 'Unique project key in SonarQube'
+    required: true
+  sonar-project-name:
+    description: 'Project name'
+    required: false
+    default: ${{ github.repository }}
+  sonar-project-version:
+    description: 'Project version'
+    required: false
+    default: '1.0'
+  sonar-sources:
+    description: 'Source code directories'
+    required: false
+    default: '.'
+  sonar-tests:
+    description: 'Test source directories'
+    required: false
+  sonar-exclusions:
+    description: 'Files/directories to exclude'
+    required: false
+  sonar-inclusions:
+    description: 'Files/directories to include specifically'
+    required: false
+  sonar-encoding:
+    description: 'Source file encoding'
+    required: false
+    default: 'UTF-8'
   sonar-scanner-version:
-    description: 'Version of SonarScanner CLI to install'
+    description: 'SonarScanner CLI version to use'
     required: false
     default: '7.2.0.5079'
-  cache:
-    description: 'Enable caching of SonarScanner CLI installation'
+  working-directory:
+    description: 'Working directory'
     required: false
-    default: 'true'
-  wait-for-quality-gate:
-    description: 'Wait for SonarQube Quality Gate result before completing'
+    default: '.'
+  
+  # Branch & Pull Request Analysis
+  sonar-organization:
+    description: 'Organization in SonarCloud'
+    required: false
+  sonar-branch-name:
+    description: 'Name of the branch to analyze'
+    required: false
+  sonar-pull-request-key:
+    description: 'Pull Request number'
+    required: false
+  sonar-pull-request-branch:
+    description: 'Pull Request branch'
+    required: false
+  sonar-pull-request-base:
+    description: 'Pull Request base branch'
+    required: false
+  
+  # Analysis Controls
+  sonar-verbose:
+    description: 'Enable verbose logging (equivalent to -X,--debug)'
     required: false
     default: 'false'
+  sonar-log-level:
+    description: 'Log level (INFO, DEBUG)'
+    required: false
+    default: 'INFO'
+  enable-jacoco:
+    description: 'Enable JaCoCo coverage analysis'
+    required: false
+    default: 'false'
+  enable-eslint:
+    description: 'Enable ESLint analysis integration'
+    required: false
+    default: 'false'
+  enable-hadolint:
+    description: 'Enable Hadolint Docker linting'
+    required: false
+    default: 'false'
+  
+  # Custom Arguments
+  extra-args:
+    description: 'Additional arguments for sonar-scanner'
+    required: false
 
 outputs:
   sonar-scanner-version:
-    description: 'The version of SonarScanner CLI that was installed'
-    value: ${{ steps.install.outputs.version }}
+    description: 'The version of SonarScanner CLI that was used'
+    value: ${{ steps.analyze.outputs.version }}
   sonar-scanner-path:
     description: 'Path to the SonarScanner CLI installation'
-    value: ${{ steps.install.outputs.path }}
-  quality-gate-wait:
-    description: 'Quality gate wait parameter value for sonar-scanner command'
-    value: ${{ inputs.wait-for-quality-gate }}
+    value: ${{ steps.analyze.outputs.path }}
+  analysis-result:
+    description: 'Analysis result status'
+    value: ${{ steps.analyze.outputs.result }}
 
 runs:
   using: 'composite'
@@ -43,17 +118,17 @@ runs:
         case "${{ runner.os }}" in
           Linux)
             echo "os=linux" >> $GITHUB_OUTPUT
-            echo "script=install-sonar-scanner.sh" >> $GITHUB_OUTPUT
+            echo "script=run-sonar-analysis.sh" >> $GITHUB_OUTPUT
             echo "shell=bash" >> $GITHUB_OUTPUT
             ;;
           macOS)
             echo "os=macos" >> $GITHUB_OUTPUT
-            echo "script=install-sonar-scanner.sh" >> $GITHUB_OUTPUT
+            echo "script=run-sonar-analysis.sh" >> $GITHUB_OUTPUT
             echo "shell=bash" >> $GITHUB_OUTPUT
             ;;
           Windows)
             echo "os=windows" >> $GITHUB_OUTPUT
-            echo "script=install-sonar-scanner.ps1" >> $GITHUB_OUTPUT
+            echo "script=run-sonar-analysis.ps1" >> $GITHUB_OUTPUT
             echo "shell=pwsh" >> $GITHUB_OUTPUT
             ;;
           *)
@@ -63,7 +138,6 @@ runs:
         esac
 
     - name: 'Cache SonarScanner CLI'
-      if: inputs.cache == 'true'
       uses: actions/cache@v4
       with:
         path: |
@@ -74,11 +148,49 @@ runs:
         restore-keys: |
           sonar-scanner-${{ steps.platform.outputs.os }}-
 
-    - name: 'Install SonarScanner CLI'
-      id: install
+    - name: 'Run SonarQube Analysis'
+      id: analyze
       shell: ${{ steps.platform.outputs.shell }}
+      working-directory: ${{ inputs.working-directory }}
       env:
+        # Core parameters
+        SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
+        SONAR_PROJECT_NAME: ${{ inputs.sonar-project-name }}
+        SONAR_PROJECT_VERSION: ${{ inputs.sonar-project-version }}
+        SONAR_SOURCES: ${{ inputs.sonar-sources }}
+        SONAR_TESTS: ${{ inputs.sonar-tests }}
+        SONAR_EXCLUSIONS: ${{ inputs.sonar-exclusions }}
+        SONAR_INCLUSIONS: ${{ inputs.sonar-inclusions }}
+        SONAR_ENCODING: ${{ inputs.sonar-encoding }}
         SONAR_SCANNER_VERSION: ${{ inputs.sonar-scanner-version }}
+        
+        # Branch & PR parameters
+        SONAR_ORGANIZATION: ${{ inputs.sonar-organization }}
+        SONAR_BRANCH_NAME: ${{ inputs.sonar-branch-name }}
+        SONAR_PULL_REQUEST_KEY: ${{ inputs.sonar-pull-request-key }}
+        SONAR_PULL_REQUEST_BRANCH: ${{ inputs.sonar-pull-request-branch }}
+        SONAR_PULL_REQUEST_BASE: ${{ inputs.sonar-pull-request-base }}
+        
+        # Analysis controls
+        SONAR_VERBOSE: ${{ inputs.sonar-verbose }}
+        SONAR_LOG_LEVEL: ${{ inputs.sonar-log-level }}
+        ENABLE_JACOCO: ${{ inputs.enable-jacoco }}
+        ENABLE_ESLINT: ${{ inputs.enable-eslint }}
+        ENABLE_HADOLINT: ${{ inputs.enable-hadolint }}
+        
+        # Custom arguments
+        EXTRA_ARGS: ${{ inputs.extra-args }}
+        
+        # GitHub context
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_PR_NUMBER: ${{ github.event.number }}
+        GITHUB_HEAD_REF: ${{ github.head_ref }}
+        GITHUB_BASE_REF: ${{ github.base_ref }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        
         RUNNER_OS: ${{ runner.os }}
       run: >-
         ${{ github.action_path }}/scripts/${{ steps.platform.outputs.script }}
