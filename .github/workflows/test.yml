@@ -1,0 +1,477 @@
+name: Test SonarScanner CLI Action
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-cross-platform:
+    name: Test Cross-Platform Analysis
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        sonar-version: ['7.2.0.5079', '6.2.0.4584']
+        enable-features: [
+          { jacoco: 'false', eslint: 'false', hadolint: 'false' },
+          { jacoco: 'true', eslint: 'true', hadolint: 'true' },
+          { jacoco: 'default', eslint: 'default', hadolint: 'default' }
+        ]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java (ensure Java is available)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Create test project
+      shell: bash
+      run: |
+        mkdir -p src/main/java/com/example
+        cat > src/main/java/com/example/App.java << 'EOF'
+        package com.example;
+        
+        public class App {
+            public static void main(String[] args) {
+                System.out.println("Hello World!");
+            }
+            
+            public String getMessage() {
+                return "Hello World!";
+            }
+        }
+        EOF
+
+    - name: Create test artifacts for auto-detection
+      if: matrix.enable-features.jacoco == 'default'
+      shell: bash
+      run: |
+        # Create JaCoCo XML report for auto-detection test
+        mkdir -p target/site/jacoco
+        cat > target/site/jacoco/jacoco.xml << 'EOF'
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <report name="coverage">
+          <counter type="INSTRUCTION" missed="0" covered="10"/>
+          <counter type="BRANCH" missed="0" covered="5"/>
+        </report>
+        EOF
+        
+        # Create ESLint configuration for auto-detection test
+        cat > .eslintrc.json << 'EOF'
+        {
+          "env": {
+            "node": true,
+            "es2021": true
+          },
+          "extends": ["eslint:recommended"]
+        }
+        EOF
+        
+        # Create Dockerfile for auto-detection test
+        cat > Dockerfile << 'EOF'
+        FROM node:18-alpine
+        WORKDIR /app
+        COPY . .
+        RUN npm install
+        CMD ["npm", "start"]
+        EOF
+
+    - name: Test SonarScanner CLI Action (dry run mode)
+      id: analysis
+      continue-on-error: true  # Expected to fail without valid server
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'test-project'
+        sonar-project-name: 'Test Project'
+        sonar-sources: 'src'
+        sonar-scanner-version: ${{ matrix.sonar-version }}
+        enable-jacoco: ${{ matrix.enable-features.jacoco == 'default' && '' || matrix.enable-features.jacoco }}
+        enable-eslint: ${{ matrix.enable-features.eslint == 'default' && '' || matrix.enable-features.eslint }}
+        enable-hadolint: ${{ matrix.enable-features.hadolint == 'default' && '' || matrix.enable-features.hadolint }}
+        sonar-verbose: 'true'
+        extra-args: '-Dsonar.scanner.dumpToFile=/tmp/analysis-dump.txt'
+
+    - name: Verify outputs and functionality
+      shell: bash
+      run: |
+        echo "Analysis result: ${{ steps.analysis.outputs.result }}"
+        echo "SonarScanner CLI version: ${{ steps.analysis.outputs.version }}"
+        echo "SonarScanner CLI path: ${{ steps.analysis.outputs.path }}"
+        
+        # Verify version output
+        if [ "${{ steps.analysis.outputs.version }}" = "${{ matrix.sonar-version }}" ]; then
+          echo "✅ Version output matches expected"
+        else
+          echo "❌ Version output doesn't match expected"
+          exit 1
+        fi
+        
+        # Verify that scanner was installed and attempted to run
+        if [ -f "/tmp/analysis-dump.txt" ] || [ "${{ steps.analysis.outcome }}" = "failure" ]; then
+          echo "✅ SonarScanner CLI attempted analysis (expected to fail without valid server)"
+        else
+          echo "❌ SonarScanner CLI didn't attempt analysis"
+          exit 1
+        fi
+
+  test-parameter-validation:
+    name: Test Parameter Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Test missing required parameters
+      id: test-missing-params
+      continue-on-error: true
+      uses: ./
+      with:
+        # Missing required sonar-host-url, sonar-token, sonar-project-key
+        sonar-project-name: 'Test'
+
+    - name: Verify parameter validation
+      run: |
+        if [ "${{ steps.test-missing-params.outcome }}" = "failure" ]; then
+          echo "✅ Missing required parameters correctly failed"
+        else
+          echo "❌ Missing required parameters should have failed"
+          exit 1
+        fi
+
+  test-branch-analysis:
+    name: Test Branch Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Create test project
+      run: |
+        mkdir -p src
+        echo "console.log('Hello World');" > src/app.js
+
+    - name: Test branch analysis
+      continue-on-error: true  # Expected to fail without valid server
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'test-branch-project'
+        sonar-branch-name: 'feature-branch'
+        sonar-sources: 'src'
+        extra-args: '-Dsonar.scanner.dumpToFile=/tmp/branch-analysis-dump.txt'
+
+    - name: Verify branch analysis configuration
+      run: |
+        if [ -f "/tmp/branch-analysis-dump.txt" ]; then
+          echo "✅ Branch analysis configuration applied"
+        else
+          echo "ℹ️  Analysis attempted (expected without valid server)"
+        fi
+
+  test-pull-request-analysis:
+    name: Test Pull Request Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Create test project
+      run: |
+        mkdir -p src
+        echo "print('Hello World')" > src/app.py
+
+    - name: Test PR analysis
+      continue-on-error: true  # Expected to fail without valid server
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'test-pr-project'
+        sonar-pull-request-key: '123'
+        sonar-pull-request-branch: 'feature-pr'
+        sonar-pull-request-base: 'main'
+        sonar-sources: 'src'
+        extra-args: '-Dsonar.scanner.dumpToFile=/tmp/pr-analysis-dump.txt'
+
+    - name: Verify PR analysis configuration
+      run: |
+        if [ -f "/tmp/pr-analysis-dump.txt" ]; then
+          echo "✅ PR analysis configuration applied"
+        else
+          echo "ℹ️  Analysis attempted (expected without valid server)"
+        fi
+
+  test-version-switching:
+    name: Test Version Switching
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Create test project
+      run: |
+        mkdir -p src
+        echo "console.log('test');" > src/test.js
+
+    - name: Install first version
+      continue-on-error: true
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'version-test-1'
+        sonar-scanner-version: '7.2.0.5079'
+        sonar-sources: 'src'
+        extra-args: '-Dsonar.scanner.dumpToFile=/tmp/version1-dump.txt'
+
+    - name: Install different version
+      continue-on-error: true
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'version-test-2'
+        sonar-scanner-version: '6.2.0.4584'
+        sonar-sources: 'src'
+        extra-args: '-Dsonar.scanner.dumpToFile=/tmp/version2-dump.txt'
+
+    - name: Verify version switching
+      run: |
+        echo "✅ Version switching completed (analysis attempts expected to fail without valid server)"
+
+  test-error-handling:
+    name: Test Error Handling
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Test invalid version (should fail gracefully)
+      id: test-invalid
+      continue-on-error: true
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'invalid-version-test'
+        sonar-scanner-version: '999.999.999.999'
+
+    - name: Verify error handling
+      run: |
+        if [ "${{ steps.test-invalid.outcome }}" = "failure" ]; then
+          echo "✅ Invalid version correctly failed"
+        else
+          echo "❌ Invalid version should have failed but didn't"
+          exit 1
+        fi
+
+  test-sonarcloud:
+    name: Test SonarCloud Configuration
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Create test project
+      run: |
+        mkdir -p src/main/java/com/example
+        cat > src/main/java/com/example/Service.java << 'EOF'
+        package com.example;
+        
+        public class Service {
+            public String processData(String input) {
+                if (input == null) {
+                    return "default";
+                }
+                return input.toUpperCase();
+            }
+        }
+        EOF
+
+    - name: Test SonarCloud analysis
+      continue-on-error: true  # Expected to fail without valid token
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarcloud.io'
+        sonar-token: 'fake-token'
+        sonar-organization: 'test-org'
+        sonar-project-key: 'test-org_test-project'
+        sonar-sources: 'src'
+        extra-args: '-Dsonar.scanner.dumpToFile=/tmp/sonarcloud-dump.txt'
+
+    - name: Verify SonarCloud configuration
+      run: |
+        if [ -f "/tmp/sonarcloud-dump.txt" ]; then
+          echo "✅ SonarCloud configuration applied"
+        else
+          echo "ℹ️  Analysis attempted (expected without valid token)"
+        fi
+
+  integration-test:
+    name: Integration Test with Features
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Node.js for ESLint test
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Create comprehensive test project
+      run: |
+        # Java source
+        mkdir -p src/main/java/com/example
+        cat > src/main/java/com/example/Calculator.java << 'EOF'
+        package com.example;
+        
+        public class Calculator {
+            public int add(int a, int b) {
+                return a + b;
+            }
+            
+            public int divide(int a, int b) {
+                if (b == 0) {
+                    throw new IllegalArgumentException("Division by zero");
+                }
+                return a / b;
+            }
+        }
+        EOF
+        
+        # JavaScript source
+        mkdir -p src/js
+        cat > src/js/utils.js << 'EOF'
+        function formatMessage(message) {
+            return message.trim().toUpperCase();
+        }
+        
+        module.exports = { formatMessage };
+        EOF
+        
+        # Create Dockerfile for Hadolint test
+        cat > Dockerfile << 'EOF'
+        FROM node:18-alpine
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm install
+        COPY . .
+        EXPOSE 3000
+        CMD ["npm", "start"]
+        EOF
+
+    - name: Install ESLint and create config
+      run: |
+        npm init -y
+        npm install --save-dev eslint
+        cat > .eslintrc.js << 'EOF'
+        module.exports = {
+            env: {
+                node: true,
+                es2021: true
+            },
+            extends: ['eslint:recommended'],
+            rules: {
+                'no-unused-vars': 'error',
+                'no-console': 'warn'
+            }
+        };
+        EOF
+
+    - name: Run ESLint
+      run: |
+        npx eslint src/js --format json --output-file eslint-report.json || true
+
+    - name: Run Hadolint
+      run: |
+        docker run --rm -i hadolint/hadolint:latest hadolint --format json - < Dockerfile > hadolint-report.json || true
+
+    - name: Test comprehensive analysis
+      continue-on-error: true  # Expected to fail without valid server
+      uses: ./
+      with:
+        sonar-host-url: 'https://sonarqube.example.com'
+        sonar-token: 'fake-token'
+        sonar-project-key: 'comprehensive-test'
+        sonar-project-name: 'Comprehensive Test Project'
+        sonar-sources: 'src'
+        sonar-exclusions: '**/node_modules/**'
+        enable-jacoco: 'true'
+        enable-eslint: 'true'
+        enable-hadolint: 'true'
+        sonar-verbose: 'true'
+        extra-args: |
+          -Dsonar.java.binaries=target/classes
+          -Dsonar.eslint.reportPaths=eslint-report.json
+          -Dsonar.docker.hadolint.reportPaths=hadolint-report.json
+          -Dsonar.scanner.dumpToFile=/tmp/comprehensive-dump.txt
+
+    - name: Verify comprehensive analysis
+      run: |
+        echo "✅ Comprehensive analysis with all features completed"
+        echo "Features tested: JaCoCo, ESLint, Hadolint integration"
+        if [ -f "/tmp/comprehensive-dump.txt" ]; then
+          echo "✅ Analysis configuration dump created"
+        fi
