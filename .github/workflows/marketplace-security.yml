@@ -1,0 +1,456 @@
+name: Security & Vulnerability Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scans weekly on Mondays at 2:00 AM UTC
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+# Required permissions for security scanning
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  pull-requests: read
+
+jobs:
+  # CodeQL Analysis for Code Security
+  codeql-analysis:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript']  # Add other languages as needed
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          config-file: ./.github/codeql-config.yml
+          
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
+
+  # Trivy Vulnerability Scanner
+  trivy-security-scan:
+    name: Trivy Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner in filesystem mode
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          ignore-unfixed: true
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy vulnerability scanner in table format
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+  # Dependency Security Review
+  dependency-review:
+    name: Dependency Security Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          allow-ghsas: ""
+          deny-licenses: "GPL-2.0, GPL-3.0"
+
+  # Secrets Scanning with TruffleHog
+  secrets-scanning:
+    name: Secrets Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better secret detection
+
+      - name: Run TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified --fail
+
+  # Action Security Validation
+  action-security-validation:
+    name: Action Security Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Action Security
+        run: |
+          echo "🔒 Validating GitHub Action security best practices..."
+          
+          # Check for hardcoded secrets in action.yml
+          if grep -i "secret\|password\|token\|key" action.yml | grep -v "description\|required"; then
+            echo "❌ Potential hardcoded secrets found in action.yml"
+            exit 1
+          fi
+          
+          # Check for secure input handling
+          if ! grep -q "inputs:" action.yml; then
+            echo "❌ No inputs section found in action.yml"
+            exit 1
+          fi
+          
+          # Verify composite action security
+          if grep -q "using: 'composite'" action.yml; then
+            echo "✅ Using composite action (secure)"
+          else
+            echo "⚠️ Not using composite action"
+          fi
+          
+          # Check for proper shell usage
+          if grep -A10 "shell:" action.yml | grep -q "bash\|pwsh"; then
+            echo "✅ Using secure shell environments"
+          else
+            echo "⚠️ Shell usage should be explicit"
+          fi
+          
+          echo "✅ Action security validation completed"
+
+      - name: Validate Script Security
+        run: |
+          echo "🛡️ Validating script security..."
+          
+          # Check bash script security
+          if [ -f "scripts/run-sonar-analysis.sh" ]; then
+            # Check for unsafe practices
+            if grep -E "(eval|exec|\$\(|``)" scripts/run-sonar-analysis.sh; then
+              echo "⚠️ Potentially unsafe shell constructs found"
+            fi
+            
+            # Check for proper error handling
+            if grep -q "set -e" scripts/run-sonar-analysis.sh; then
+              echo "✅ Bash script has proper error handling"
+            else
+              echo "⚠️ Bash script should use 'set -e' for error handling"
+            fi
+            
+            # Check for input validation
+            if grep -q "validate\|check" scripts/run-sonar-analysis.sh; then
+              echo "✅ Script includes input validation"
+            else
+              echo "⚠️ Consider adding input validation"
+            fi
+          fi
+          
+          # Check PowerShell script security
+          if [ -f "scripts/run-sonar-analysis.ps1" ]; then
+            if grep -q "ErrorActionPreference" scripts/run-sonar-analysis.ps1; then
+              echo "✅ PowerShell script has proper error handling"
+            else
+              echo "⚠️ PowerShell script should set ErrorActionPreference"
+            fi
+          fi
+          
+          echo "✅ Script security validation completed"
+
+  # Container Security Scanning
+  container-security:
+    name: Container Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Test Dockerfile for Security Scan
+        run: |
+          cat > test.Dockerfile << 'EOF'
+          FROM ubuntu:22.04
+          
+          # Install Java and required packages
+          RUN apt-get update && \
+              apt-get install -y openjdk-17-jdk wget unzip curl && \
+              apt-get clean && \
+              rm -rf /var/lib/apt/lists/*
+          
+          # Copy action scripts
+          COPY scripts/ /action/scripts/
+          
+          # Set working directory
+          WORKDIR /workspace
+          
+          # Set entrypoint
+          ENTRYPOINT ["/action/scripts/run-sonar-analysis.sh"]
+          EOF
+
+      - name: Build test container
+        run: |
+          docker build -f test.Dockerfile -t sonarscanner-cli-action:test .
+
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sonarscanner-cli-action:test'
+          format: 'sarif'
+          output: 'container-trivy-results.sarif'
+
+      - name: Upload container scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'container-trivy-results.sarif'
+
+  # Marketplace Security Compliance
+  marketplace-security-compliance:
+    name: Marketplace Security Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Marketplace Security Requirements
+        run: |
+          echo "🏪 Validating GitHub Marketplace security requirements..."
+          
+          # Check for required security documentation
+          security_docs=("SECURITY.md" "README.md")
+          for doc in "${security_docs[@]}"; do
+            if [ -f "$doc" ]; then
+              if grep -qi "security\|vulnerability\|report" "$doc"; then
+                echo "✅ $doc contains security information"
+              else
+                echo "⚠️ $doc should contain security reporting information"
+              fi
+            else
+              echo "⚠️ $doc not found - consider adding security documentation"
+            fi
+          done
+          
+          # Check for proper license
+          if [ -f "LICENSE" ]; then
+            echo "✅ License file exists"
+          else
+            echo "❌ License file required for marketplace"
+            exit 1
+          fi
+          
+          # Validate action.yml security metadata
+          if grep -q "branding:" action.yml; then
+            echo "✅ Action has proper branding (required for marketplace)"
+          else
+            echo "❌ Action missing branding section"
+            exit 1
+          fi
+          
+          # Check for comprehensive documentation
+          required_sections=("usage" "input" "example")
+          for section in "${required_sections[@]}"; do
+            if grep -qi "$section" README.md; then
+              echo "✅ README includes $section section"
+            else
+              echo "⚠️ README should include $section section"
+            fi
+          done
+          
+          echo "✅ Marketplace security compliance validation completed"
+
+      - name: Validate Token Security Practices
+        run: |
+          echo "🔐 Validating token security practices..."
+          
+          # Check that scripts don't log tokens
+          if grep -r "echo.*TOKEN\|print.*TOKEN\|console.*TOKEN" scripts/; then
+            echo "❌ Scripts may be logging tokens - security risk"
+            exit 1
+          fi
+          
+          # Check for proper environment variable usage
+          if grep -r "SONAR_TOKEN" scripts/ | grep -v "export\|local"; then
+            echo "✅ Scripts use environment variables for tokens"
+          else
+            echo "⚠️ Verify token handling in scripts"
+          fi
+          
+          # Check documentation doesn't expose real tokens
+          if grep -r "sk_test\|ghp_\|gho_\|token.*=" README.md docs/ examples/ 2>/dev/null; then
+            echo "❌ Documentation may contain real tokens"
+            exit 1
+          fi
+          
+          echo "✅ Token security validation completed"
+
+  # Security Policy Validation
+  security-policy:
+    name: Security Policy Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Security Policy if Missing
+        run: |
+          if [ ! -f "SECURITY.md" ]; then
+            echo "📝 Creating SECURITY.md file..."
+            cat > SECURITY.md << 'EOF'
+          # Security Policy
+          
+          ## Supported Versions
+          
+          We release patches for security vulnerabilities in the following versions:
+          
+          | Version | Supported          |
+          | ------- | ------------------ |
+          | 1.x.x   | :white_check_mark: |
+          | < 1.0   | :x:                |
+          
+          ## Reporting a Vulnerability
+          
+          If you discover a security vulnerability, please report it by emailing our security team or by creating a private security advisory on GitHub.
+          
+          **Please do not report security vulnerabilities through public GitHub issues.**
+          
+          ### What to include in your report:
+          
+          - A description of the vulnerability
+          - Steps to reproduce the issue
+          - Potential impact
+          - Any suggested fixes
+          
+          ### Response Timeline:
+          
+          - We will acknowledge receipt of your vulnerability report within 48 hours
+          - We will provide a detailed response within 7 days
+          - We will notify you when the vulnerability is fixed
+          
+          ## Security Best Practices
+          
+          When using this action:
+          
+          1. **Store tokens securely** - Always use GitHub Secrets for sensitive data
+          2. **Use least privilege** - Only grant necessary permissions
+          3. **Keep updated** - Use the latest version of the action
+          4. **Review dependencies** - Monitor for security updates
+          
+          ## Contact
+          
+          For security-related questions, please contact the maintainers.
+          EOF
+            
+            echo "✅ SECURITY.md created"
+          else
+            echo "✅ SECURITY.md already exists"
+          fi
+
+      - name: Validate Security Policy Content
+        run: |
+          if [ -f "SECURITY.md" ]; then
+            if grep -qi "reporting\|vulnerability\|security" SECURITY.md; then
+              echo "✅ SECURITY.md contains required security information"
+            else
+              echo "⚠️ SECURITY.md should be enhanced with security information"
+            fi
+          fi
+
+  # Security Summary Report
+  security-summary:
+    name: Security Summary Report
+    needs: [codeql-analysis, trivy-security-scan, secrets-scanning, action-security-validation, marketplace-security-compliance, security-policy]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Security Summary
+        run: |
+          echo "# 🔒 Security Analysis Summary" > security-summary.md
+          echo "" >> security-summary.md
+          echo "## Security Scan Results" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "| Security Check | Status |" >> security-summary.md
+          echo "|----------------|--------|" >> security-summary.md
+          echo "| CodeQL Analysis | ${{ needs.codeql-analysis.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> security-summary.md
+          echo "| Trivy Vulnerability Scan | ${{ needs.trivy-security-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> security-summary.md
+          echo "| Secrets Scanning | ${{ needs.secrets-scanning.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> security-summary.md
+          echo "| Action Security Validation | ${{ needs.action-security-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> security-summary.md
+          echo "| Marketplace Security Compliance | ${{ needs.marketplace-security-compliance.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> security-summary.md
+          echo "| Security Policy | ${{ needs.security-policy.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          if [[ "${{ needs.codeql-analysis.result }}" == "success" && \
+                "${{ needs.trivy-security-scan.result }}" == "success" && \
+                "${{ needs.secrets-scanning.result }}" == "success" && \
+                "${{ needs.action-security-validation.result }}" == "success" && \
+                "${{ needs.marketplace-security-compliance.result }}" == "success" && \
+                "${{ needs.security-policy.result }}" == "success" ]]; then
+            echo "## ✅ Overall Security Status: PASSED" >> security-summary.md
+            echo "" >> security-summary.md
+            echo "All security checks have passed. The action meets GitHub Marketplace security requirements." >> security-summary.md
+          else
+            echo "## ⚠️ Overall Security Status: NEEDS ATTENTION" >> security-summary.md
+            echo "" >> security-summary.md
+            echo "Some security checks require attention before marketplace publication." >> security-summary.md
+          fi
+          
+          echo "" >> security-summary.md
+          echo "## Security Recommendations" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "- Regularly update dependencies to latest secure versions" >> security-summary.md
+          echo "- Monitor security advisories for used dependencies" >> security-summary.md
+          echo "- Review and validate all external inputs" >> security-summary.md
+          echo "- Use GitHub Security Advisories for vulnerability disclosure" >> security-summary.md
+          echo "- Follow principle of least privilege for permissions" >> security-summary.md
+          
+          cat security-summary.md
+
+      - name: Upload Security Summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-summary-report
+          path: security-summary.md
+          retention-days: 30
