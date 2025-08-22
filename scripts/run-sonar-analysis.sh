@@ -33,7 +33,8 @@ SCANNER_ZIP_URL="https://github.com/SonarSource/sonar-scanner-cli/releases/downl
 # Detect system architecture for macOS optimization
 detect_system_architecture() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        local arch=$(uname -m)
+        local arch
+        arch=$(uname -m)
         case $arch in
             "arm64")
                 print_info "Detected macOS Apple Silicon (ARM64)"
@@ -244,7 +245,7 @@ detect_hadolint() {
     )
     
     for pattern in "${docker_files[@]}"; do
-        if ls $pattern 1> /dev/null 2>&1; then
+        if ls "$pattern" 1> /dev/null 2>&1; then
             hadolint_config_found=true
             break
         fi
@@ -352,6 +353,8 @@ main() {
     print_info "Command: $sonar_cmd"
     
     print_info "Starting SonarQube analysis..."
+    # Note: eval is needed here to properly execute the command string with arguments
+    # The command is built internally and doesn't include user input, making it safe
     if eval "$sonar_cmd"; then
         print_success "SonarQube analysis completed successfully"
         analysis_result="success"
@@ -363,10 +366,12 @@ main() {
     
     # Set outputs
     installed_version=$("$SONAR_SCANNER_HOME/bin/sonar-scanner" --version 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
-    echo "version=$installed_version" >> $GITHUB_OUTPUT
-    echo "path=$SONAR_SCANNER_HOME" >> $GITHUB_OUTPUT
-    echo "result=$analysis_result" >> $GITHUB_OUTPUT
-    echo "architecture=$DETECTED_ARCH" >> $GITHUB_OUTPUT
+    {
+        echo "version=$installed_version"
+        echo "path=$SONAR_SCANNER_HOME"
+        echo "result=$analysis_result"
+        echo "architecture=$DETECTED_ARCH"
+    } >> "$GITHUB_OUTPUT"
     
     print_success "Analysis completed successfully"
 }
