@@ -510,3 +510,7 @@ If you encounter issues or have questions:
 - [SonarCloud](https://sonarcloud.io/)  
 - [SonarScanner CLI](https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [GitHub Marketplace](https://github.com/marketplace)
+
+---
+*This action is designed for GitHub Marketplace publication and is maintained to enterprise-grade standards.*
