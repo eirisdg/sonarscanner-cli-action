@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'issue/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint action.yml
+        uses: "rhysd/actionlint-github-actions@v1"
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  test-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './scripts'
+
+  test-powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PSScriptAnalyzer
+        uses: microsoft/psscriptanalyzer-action@v1
+        with:
+          path: 'scripts/run-sonar-analysis.ps1'
+
+  integration-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run action
+        uses: ./
+        with:
+          sonar-host-url: 'https://sonarcloud.io'
+          sonar-token: 'fake-token'
+          sonar-project-key: 'test-project'
+          extra-args: |
+            -Dsonar.scanner.dryRun=true
